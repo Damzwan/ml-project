@@ -1,64 +1,68 @@
-# Copyright 2019 DeepMind Technologies Limited
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Tabular Q-Learner example on Tic Tac Toe.
-Two Q-Learning agents are trained by playing against each other. Then, the game
-can be played against the agents from the command line.
-After about 10**5 training episodes, the agents reach a good policy: win rate
-against random opponents is around 99% for player 0 and 92% for player 1.
-"""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import logging
-import sys
+
+import pyspiel
+from open_spiel.python.utils import file_utils
 from absl import app
-from absl import flags
 import numpy as np
+import random
 
 from open_spiel.python import rl_environment
-from open_spiel.python.algorithms import random_agent
-from open_spiel.python.algorithms import tabular_qlearner
+from open_spiel.python.algorithms import tabular_qlearner, random_agent
+
+
+def _manually_create_game(utilities1, utilities2):
+    """Creates the game manually from the spiel building blocks."""
+    game_type = pyspiel.GameType(
+        "matrix_rps",
+        "Rock Paper Scissors",
+        pyspiel.GameType.Dynamics.SIMULTANEOUS,
+        pyspiel.GameType.ChanceMode.DETERMINISTIC,
+        pyspiel.GameType.Information.ONE_SHOT,
+        pyspiel.GameType.Utility.ZERO_SUM,
+        pyspiel.GameType.RewardModel.TERMINAL,
+        2,  # max num players
+        2,  # min_num_players
+        True,  # provides_information_state
+        True,  # provides_information_state_tensor
+        False,  # provides_observation
+        False,  # provides_observation_tensor
+        dict()  # parameter_specification
+    )
+    game = pyspiel.MatrixGame(
+        game_type,
+        {},  # game_parameters
+        ["Rock", "Paper", "Scissors"],  # row_action_names
+        ["Rock", "Paper", "Scissors"],  # col_action_names
+        utilities1,  # row player utilities
+        utilities2  # col player utilities
+    )
+    return game
 
 
 def eval_against_random_bots(env, trained_agents, random_agents, num_episodes):
     """Evaluates `trained_agents` against `random_agents` for `num_episodes`."""
-    wins = np.zeros(2)
-    for player_pos in range(2):
-        if player_pos == 0:
-            cur_agents = [trained_agents[0], random_agents[1]]
-        else:
-            cur_agents = [random_agents[0], trained_agents[1]]
-        for _ in range(num_episodes):
-            time_step = env.reset()
-            while not time_step.last():
-                player_id = time_step.observations["current_player"]
-                agent_output = cur_agents[player_id].step(time_step, is_evaluation=True)
-                time_step = env.step([agent_output.action])
-            if time_step.rewards[player_pos] > 0:
-                wins[player_pos] += 1
-    return wins / num_episodes
+    wins = 0
+    for _ in range(num_episodes):
+        time_step = env.reset()
+        trained_output = random.choice(trained_agents).step(time_step, is_evaluation=True)
+        random_output = random.choice(random_agents).step(time_step, is_evaluation=True)
+        time_step = env.step([trained_output.action, random_output.action])
+        if time_step.rewards[0] > 0:
+            wins += 1
+    return wins/num_episodes
 
 
 def main(_):
-    game = "python_rock_paper_scissors"
+    rps_game = _manually_create_game([[0, -0.25, 0.5], [0.25, 0, -0.05], [-0.5, 0.05, 0]],
+                                     [[0, 0.25, -0.5], [-0.25, 0, 0.05], [0.5, -0.05, 0]])
+
+    dispersion_game = _manually_create_game([[3, 0], [0, 2]], [[2, 0], [0, 3]])  # TODO is not ZERO SUM
+    # TODO define other games
+
     num_players = 2
     training_episodes = int(5e4)
 
-    env = rl_environment.Environment(game)
+    env = rl_environment.Environment(rps_game)
     num_actions = env.action_spec()["num_actions"]
 
     agents = [
@@ -80,8 +84,9 @@ def main(_):
         time_step = env.reset()
         while not time_step.last():
             player_id = time_step.observations["current_player"]
-            agent_output = agents[player_id].step(time_step)
-            time_step = env.step([agent_output.action])
+            agent1_output = agents[0].step(time_step)
+            agent2_output = agents[1].step(time_step)
+            time_step = env.step([agent1_output.action, agent2_output.action])
 
         # Episode is over, step all agents with final info state.
         for agent in agents:
