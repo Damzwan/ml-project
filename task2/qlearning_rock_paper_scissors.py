@@ -10,7 +10,7 @@ from open_spiel.python import rl_environment
 from open_spiel.python.algorithms import tabular_qlearner, random_agent
 
 
-def _manually_create_game(utilities1, utilities2):
+def _manually_create_game(utilities1, utilities2, sum_type, row_action_names):
     """Creates the game manually from the spiel building blocks."""
     game_type = pyspiel.GameType(
         "matrix_rps",
@@ -18,7 +18,7 @@ def _manually_create_game(utilities1, utilities2):
         pyspiel.GameType.Dynamics.SIMULTANEOUS,
         pyspiel.GameType.ChanceMode.DETERMINISTIC,
         pyspiel.GameType.Information.ONE_SHOT,
-        pyspiel.GameType.Utility.ZERO_SUM,
+        sum_type,
         pyspiel.GameType.RewardModel.TERMINAL,
         2,  # max num players
         2,  # min_num_players
@@ -31,8 +31,8 @@ def _manually_create_game(utilities1, utilities2):
     game = pyspiel.MatrixGame(
         game_type,
         {},  # game_parameters
-        ["Rock", "Paper", "Scissors"],  # row_action_names
-        ["Rock", "Paper", "Scissors"],  # col_action_names
+        row_action_names,  # row_action_names
+        row_action_names,  # col_action_names
         utilities1,  # row player utilities
         utilities2  # col player utilities
     )
@@ -50,20 +50,27 @@ def eval_against_random_bots(env, trained_agents, random_agents, num_episodes):
             time_step = env.step([trained_output.action, random_output.action])
         if time_step.rewards[0] > 0:
             wins += 1
-    return wins/num_episodes
+    return wins / num_episodes
 
 
 def main(_):
     rps_game = _manually_create_game([[0, -0.25, 0.5], [0.25, 0, -0.05], [-0.5, 0.05, 0]],
-                                     [[0, 0.25, -0.5], [-0.25, 0, 0.05], [0.5, -0.05, 0]])
+                                     [[0, 0.25, -0.5], [-0.25, 0, 0.05], [0.5, -0.05, 0]],
+                                     pyspiel.GameType.Utility.ZERO_SUM, ["Rock", "Paper", "Scissors"])
 
-    dispersion_game = _manually_create_game([[3, 0], [0, 2]], [[2, 0], [0, 3]])  # TODO is not ZERO SUM
+    battle_of_sexes_game = _manually_create_game([[3, 0], [0, 2]], [[2, 0], [0, 3]],
+                                                 pyspiel.GameType.Utility.GENERAL_SUM,
+                                                 ["O", "M"])  # TODO is not ZERO SUM
+
+    subsidy_game = _manually_create_game([[10, 0], [11, 12]], [[10, 0], [11, 12]],
+                                         pyspiel.GameType.Utility.GENERAL_SUM, ["S1", "S2"])
+
     # TODO define other games
 
     num_players = 2
     training_episodes = int(5e5) + 1
 
-    env = rl_environment.Environment(rps_game)
+    env = rl_environment.Environment(subsidy_game)
     num_actions = env.action_spec()["num_actions"]
 
     agents = [
@@ -84,13 +91,16 @@ def main(_):
             logging.info("Starting episode %s, win_rates %s", cur_episode, win_rates)
         time_step = env.reset()
         while not time_step.last():
-            agent1_output = agents[0].step(time_step, is_evaluation=True)
-            agent2_output = agents[1].step(time_step, is_evaluation=True)
+            agent1_output = agents[0].step(time_step)
+            agent2_output = agents[1].step(time_step)
             time_step = env.step([agent1_output.action, agent2_output.action])
 
         # Episode is over, step all agents with final info state.
         for agent in agents:
             agent.step(time_step)
+
+    for agent in agents:
+        print(agent._q_values)
 
 
 if __name__ == "__main__":
