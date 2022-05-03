@@ -44,9 +44,10 @@ def eval_against_random_bots(env, trained_agents, random_agents, num_episodes):
     wins = 0
     for _ in range(num_episodes):
         time_step = env.reset()
-        trained_output = random.choice(trained_agents).step(time_step, is_evaluation=True)
-        random_output = random.choice(random_agents).step(time_step, is_evaluation=True)
-        time_step = env.step([trained_output.action, random_output.action])
+        while not time_step.last():
+            trained_output = random.choice(trained_agents).step(time_step, is_evaluation=True)
+            random_output = random.choice(random_agents).step(time_step, is_evaluation=True)
+            time_step = env.step([trained_output.action, random_output.action])
         if time_step.rewards[0] > 0:
             wins += 1
     return wins/num_episodes
@@ -60,7 +61,7 @@ def main(_):
     # TODO define other games
 
     num_players = 2
-    training_episodes = int(5e4)
+    training_episodes = int(5e5) + 1
 
     env = rl_environment.Environment(rps_game)
     num_actions = env.action_spec()["num_actions"]
@@ -83,9 +84,8 @@ def main(_):
             logging.info("Starting episode %s, win_rates %s", cur_episode, win_rates)
         time_step = env.reset()
         while not time_step.last():
-            player_id = time_step.observations["current_player"]
-            agent1_output = agents[0].step(time_step)
-            agent2_output = agents[1].step(time_step)
+            agent1_output = agents[0].step(time_step, is_evaluation=True)
+            agent2_output = agents[1].step(time_step, is_evaluation=True)
             time_step = env.step([agent1_output.action, agent2_output.action])
 
         # Episode is over, step all agents with final info state.
