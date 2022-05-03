@@ -71,7 +71,7 @@ def main(_):
                                                  pyspiel.GameType.Utility.GENERAL_SUM,
                                                  ["O", "M"])
 
-    subsidy_game = _manually_create_game([[10, 0], [11, 12]], [[10, 0], [11, 12]],
+    subsidy_game = _manually_create_game([[10, 0], [11, 12]], [[10, 11], [0, 12]],
                                          pyspiel.GameType.Utility.GENERAL_SUM, ["S1", "S2"])
 
     dispersion_game = _manually_create_game([[-1, 1], [1, -1]], [[1, -1], [1, -1]],

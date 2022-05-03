@@ -73,12 +73,12 @@ def main(_):
                                                  pyspiel.GameType.Utility.GENERAL_SUM,
                                                  ["O", "M"])
 
-    subsidy_game = _manually_create_game([[10, 0], [11, 12]], [[10, 0], [11, 12]],
+    subsidy_game = _manually_create_game([[10, 0], [11, 12]], [[10, 11], [0, 12]],
                                          pyspiel.GameType.Utility.GENERAL_SUM, ["S1", "S2"])
 
 
 
-    env = rl_environment.Environment(dispersion_game)
+    env = rl_environment.Environment(subsidy_game)
 
     num_players = 2
     training_episodes = int(1e5) + 1
@@ -112,10 +112,10 @@ def main(_):
         #agents[0].step(time_step)
         for agent in agents:
             agent.step(time_step)
-        
+
         for key, val in list(agents[0]._q_values.values())[0].items():
             q_val[key].append(val)
-    
+
     plt.plot(range(len(q_val[0])), q_val[0], label='q0')
     plt.plot(range(len(q_val[1])), q_val[1], label='q1')
     plt.plot(range(len(q_val[2])), q_val[2], label='q2')
@@ -124,7 +124,6 @@ def main(_):
 
     for agent in agents:
         print(agent._q_values)
-
 
 if __name__ == "__main__":
     app.run(main)
