@@ -1,6 +1,8 @@
 import logging
 
 import pyspiel
+
+from open_spiel.python.egt import dynamics
 from open_spiel.python.utils import file_utils
 from absl import app
 import numpy as np
@@ -9,6 +11,7 @@ import matplotlib.pyplot as plt
 
 from open_spiel.python import rl_environment
 from open_spiel.python.algorithms import tabular_qlearner, random_agent
+from open_spiel.python.egt.utils import game_payoffs_array
 
 
 def _manually_create_game(utilities1, utilities2, sum_type, row_action_names):
@@ -53,6 +56,7 @@ def eval_against_random_bots(env, trained_agents, random_agents, num_episodes):
             wins += 1
     return wins / num_episodes
 
+
 def eval_average(env, trained_agents):
     time_step = env.reset()
     while not time_step.last():
@@ -61,24 +65,24 @@ def eval_average(env, trained_agents):
         time_step = env.step([trained_output0.action, trained_output1.action])
     return time_step.rewards[0], time_step.rewards[1]
 
-def main(_):
-    rps_game = _manually_create_game([[0, -0.25, 0.5], [0.25, 0, -0.05], [-0.5, 0.05, 0]],
-                                     [[0, 0.25, -0.5], [-0.25, 0, 0.05], [0.5, -0.05, 0]],
-                                     pyspiel.GameType.Utility.ZERO_SUM, ["Rock", "Paper", "Scissors"])
 
-    dispersion_game = _manually_create_game([[-1, 1], [1, -1]], [[1, -1], [1, -1]],
+rps_game = _manually_create_game([[0, -0.25, 0.5], [0.25, 0, -0.05], [-0.5, 0.05, 0]],
+                                 [[0, 0.25, -0.5], [-0.25, 0, 0.05], [0.5, -0.05, 0]],
+                                 pyspiel.GameType.Utility.ZERO_SUM, ["Rock", "Paper", "Scissors"])
+
+dispersion_game = _manually_create_game([[-1, 1], [1, -1]], [[1, -1], [1, -1]],
                                         pyspiel.GameType.Utility.GENERAL_SUM, ["D1", "D2"])
 
-    battle_of_sexes_game = _manually_create_game([[3, 0], [0, 2]], [[2, 0], [0, 3]],
-                                                 pyspiel.GameType.Utility.GENERAL_SUM,
-                                                 ["O", "M"])
+battle_of_sexes_game = _manually_create_game([[3, 0], [0, 2]], [[2, 0], [0, 3]],
+                                             pyspiel.GameType.Utility.GENERAL_SUM,
+                                             ["O", "M"])
 
-    subsidy_game = _manually_create_game([[10, 0], [11, 12]], [[10, 11], [0, 12]],
-                                         pyspiel.GameType.Utility.GENERAL_SUM, ["S1", "S2"])
+subsidy_game = _manually_create_game([[10, 0], [11, 12]], [[10, 11], [0, 12]],
+                                     pyspiel.GameType.Utility.GENERAL_SUM, ["S1", "S2"])
 
 
-
-    env = rl_environment.Environment(subsidy_game)
+def subtask1():
+    env = rl_environment.Environment(battle_of_sexes_game)
 
     num_players = 2
     training_episodes = int(1e5) + 1
@@ -95,7 +99,7 @@ def main(_):
         for idx in range(num_players)
     ]
 
-    q_val = {0: [], 1: [], 2:[]}
+    q_val = {0: [], 1: [], 2: []}
     # 1. Train the agents
     for cur_episode in range(training_episodes):
         if cur_episode % int(1e3) == 0:
@@ -109,7 +113,7 @@ def main(_):
             time_step = env.step([agent1_output.action, agent2_output.action])
 
         # Episode is over, step all agents with final info state.
-        #agents[0].step(time_step)
+        # agents[0].step(time_step)
         for agent in agents:
             agent.step(time_step)
 
@@ -124,6 +128,33 @@ def main(_):
 
     for agent in agents:
         print(agent._q_values)
+
+
+def subtask2():
+    game = rps_game
+    rd = dynamics.replicator
+
+    dt = 0.01
+    payoff_matrix = game_payoffs_array(game)
+    probs = [[1 / len(game.row_utilities()) for _ in game.row_utilities()]]
+
+    dyn = dynamics.SinglePopulationDynamics(payoff_matrix, rd)
+
+    for t in range(int(1e5)):
+        time_derivatives = dyn(probs[t])
+        probs.append([probs[t][index] + fitness * dt for index, fitness in enumerate(time_derivatives)])
+
+    plt.plot([prob[0] for prob in probs], [prob[1] for prob in probs])
+    plt.title('Phase space of the"Rock, paper, scissors"-game')
+    plt.xlabel('rock')
+    plt.ylabel('paper')
+    plt.grid()
+    plt.show()
+
+
+def main(_):
+    subtask2()
+
 
 if __name__ == "__main__":
     app.run(main)
