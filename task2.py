@@ -136,18 +136,29 @@ def subtask2():
 
     dt = 0.01
     payoff_matrix = game_payoffs_array(game)
-    probs = [[1 / len(game.row_utilities()) for _ in game.row_utilities()]]
 
-    dyn = dynamics.SinglePopulationDynamics(payoff_matrix, rd)
+    probs_1 = [[1 / len(game.row_utilities()) for _ in game.row_utilities()]]
+    probs_2 = [[1 / len(game.row_utilities()) for _ in game.row_utilities()]]
+
+    dyn_1 = dynamics.SinglePopulationDynamics(payoff_matrix, rd)
+    dyn_2 = dynamics.SinglePopulationDynamics(payoff_matrix, rd, 1)
+
+    nx, ny = .2, .2
+    x = np.arange(0.1, 0.9, nx)
+    y = np.arange(0.1, 0.9, ny)
+    X, Y = np.meshgrid(x, y)
+
+    dy = X + np.sin(Y)  # calculate fitness for all possible values
+    dx = np.ones(dy.shape)  # idk why
+    plt.quiver(X, Y, dx, dy, color='purple', headaxislength=2, headlength=0, pivot='middle')
 
     for t in range(int(1e5)):
-        time_derivatives = dyn(probs[t])
-        probs.append([probs[t][index] + fitness * dt for index, fitness in enumerate(time_derivatives)])
+        # probs.append(probs[t] + time_derivatives*dt) with numpy xd
+        probs_1.append([probs_1[t][index] + fitness * dt for index, fitness in enumerate(dyn_1(probs_1[t]))])
+        probs_2.append([probs_2[t][index] + fitness * dt for index, fitness in enumerate(dyn_2(probs_2[t]))])
 
-    plt.plot([prob[0] for prob in probs], [prob[1] for prob in probs])
-    plt.title('Phase space of the"Rock, paper, scissors"-game')
-    plt.xlabel('rock')
-    plt.ylabel('paper')
+    plt.plot([prob[1] for prob in probs_1], [prob[1] for prob in probs_2])
+
     plt.grid()
     plt.show()
 
