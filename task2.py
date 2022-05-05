@@ -3,6 +3,7 @@ import logging
 import pyspiel
 
 from open_spiel.python.egt import dynamics
+from open_spiel.python.egt.visualization import Dynamics2x2Axes, _eval_dynamics_2x2_grid, Dynamics3x3Axes
 from open_spiel.python.utils import file_utils
 from absl import app
 import numpy as np
@@ -131,36 +132,25 @@ def subtask1():
 
 
 def subtask2():
-    game = rps_game
+    game = subsidy_game
     rd = dynamics.replicator
-
-    dt = 0.01
+    game_size = game.num_rows()
     payoff_matrix = game_payoffs_array(game)
 
-    probs_1 = [[1 / len(game.row_utilities()) for _ in game.row_utilities()]]
-    probs_2 = [[1 / len(game.row_utilities()) for _ in game.row_utilities()]]
+    if game_size == 2:
+        dyn = dynamics.MultiPopulationDynamics(payoff_matrix, rd)
+        visualiser = Dynamics2x2Axes(plt.figure(), [0, 0, 1, 1])
+        visualiser.streamplot(dyn)
 
-    dyn_1 = dynamics.SinglePopulationDynamics(payoff_matrix, rd)
-    dyn_2 = dynamics.SinglePopulationDynamics(payoff_matrix, rd, 1)
+        # x, y, u, v = _eval_dynamics_2x2_grid(dyn, 50)
+        # plt.streamplot(x, y, u, v)
+    elif game_size == 3:
+        dyn = dynamics.SinglePopulationDynamics(payoff_matrix, rd)
+        visualiser = Dynamics3x3Axes(plt.figure(), [0, 0, 1, 1])
+        visualiser.streamplot(dyn)
 
-    nx, ny = .2, .2
-    x = np.arange(0.1, 0.9, nx)
-    y = np.arange(0.1, 0.9, ny)
-    X, Y = np.meshgrid(x, y)
 
-    dy = X + np.sin(Y)  # calculate fitness for all possible values
-    dx = np.ones(dy.shape)  # idk why
-    plt.quiver(X, Y, dx, dy, color='purple', headaxislength=2, headlength=0, pivot='middle')
 
-    for t in range(int(1e5)):
-        # probs.append(probs[t] + time_derivatives*dt) with numpy xd
-        probs_1.append([probs_1[t][index] + fitness * dt for index, fitness in enumerate(dyn_1(probs_1[t]))])
-        probs_2.append([probs_2[t][index] + fitness * dt for index, fitness in enumerate(dyn_2(probs_2[t]))])
-
-    plt.plot([prob[1] for prob in probs_1], [prob[1] for prob in probs_2])
-
-    plt.grid()
-    plt.show()
 
 
 def main(_):
