@@ -132,8 +132,8 @@ def subtask1():
 
 
 def subtask2():
-    game = subsidy_game
-    rd = dynamics.replicator
+    game = battle_of_sexes_game
+    rd = dynamics.boltzmannq
     game_size = game.num_rows()
     payoff_matrix = game_payoffs_array(game)
 
@@ -142,14 +142,13 @@ def subtask2():
         visualiser = Dynamics2x2Axes(plt.figure(), [0, 0, 1, 1])
         visualiser.streamplot(dyn)
 
-        # x, y, u, v = _eval_dynamics_2x2_grid(dyn, 50)
-        # plt.streamplot(x, y, u, v)
+        x, y, u, v = _eval_dynamics_2x2_grid(dyn, 50)
+        plt.streamplot(x, y, u, v)
+        plt.show()
     elif game_size == 3:
         dyn = dynamics.SinglePopulationDynamics(payoff_matrix, rd)
         visualiser = Dynamics3x3Axes(plt.figure(), [0, 0, 1, 1])
         visualiser.streamplot(dyn)
-
-
 
 
 
