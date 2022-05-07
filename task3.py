@@ -1,29 +1,37 @@
+import logging
 from cProfile import run
 import random
 import pyspiel
 import numpy as np
-from open_spiel.python import rl_environment
-from open_spiel.python.algorithms import tabular_qlearner, random_agent
+from open_spiel.python import rl_environment, policy
+from open_spiel.python.algorithms import tabular_qlearner, random_agent, exploitability
 
-# def runOneGame(agents):
-#     game = pyspiel.load_game("kuhn_poker")
-#     state = game.new_initial_state()
-#     while not state.is_terminal():
-#         legal_actions = state.legal_actions()
-#         if state.is_chance_node():
-#             outcomes_with_probs = state.chance_outcomes()
-#             action_list, prob_list = zip(*outcomes_with_probs)
-#             print(action_list, prob_list)
-#             action = np.random.choice(action_list, p=prob_list)
-#             state.apply_action(action)
-#         else:
-#             state.apply_action(legal_actions[getAction(state, agents)])
-#         print("state:", state)
-#     print(state.rewards)
 
-# def getAction(state, agents):
-#     # returns index of legal action to perform
-#     return 0
+class NFSPPolicies(policy.Policy):
+    """Joint policy to be evaluated."""
+
+    def __init__(self, env, nfsp_policies):
+        game = env.game
+        player_ids = [0, 1]
+        super(NFSPPolicies, self).__init__(game, player_ids)
+        self._policies = nfsp_policies
+        self._obs = {"info_state": [None, None], "legal_actions": [None, None]}
+
+    def action_probabilities(self, state, player_id=None):
+        cur_player = state.current_player()
+        legal_actions = state.legal_actions(cur_player)
+
+        self._obs["current_player"] = cur_player
+        self._obs["info_state"][cur_player] = (
+            state.information_state_tensor(cur_player))
+        self._obs["legal_actions"][cur_player] = legal_actions
+
+        info_state = rl_environment.TimeStep(
+            observations=self._obs, rewards=None, discounts=None, step_type=None)
+
+        p = self._policies[cur_player].step(info_state, is_evaluation=True).probs
+        prob_dict = {action: p[action] for action in legal_actions}
+        return prob_dict
 
 
 def eval_against_random_bots(env, trained_agent, num_episodes):
@@ -45,7 +53,7 @@ def eval_against_random_bots(env, trained_agent, num_episodes):
 
             time_step = env.step([action])
 
-        if time_step.rewards[1-who_random] > 0:
+        if time_step.rewards[1 - who_random] > 0:
             wins += 1
     return wins / num_episodes
 
@@ -57,15 +65,19 @@ agents = [
     tabular_qlearner.QLearner(player_id=idx, num_actions=num_actions)
     for idx in range(2)
 ]
+expl_policies_avg = NFSPPolicies(env, agents)
 
 random_agent = random_agent.RandomAgent(player_id=0, num_actions=num_actions)
 
 for cur_episode in range(int(1e6)):
     if cur_episode % int(5e3) == 0:
-        win_rates = eval_against_random_bots(env, agents[0], 10000)
-        print("episode " + str(cur_episode) + ": winrate " + str(win_rates))
-    
-    time_step = env.reset() 
+        losses = [agent.loss for agent in agents]
+        logging.info("Losses: %s", losses)
+        expl = exploitability.exploitability(env.game, expl_policies_avg)
+        logging.info("[%s] Exploitability AVG %s", cur_episode + 1, expl)
+        logging.info("_____________________________________________")
+
+    time_step = env.reset()
     agents_order = random.sample(agents, 2)
     while not time_step.step_type.last():
         pid = time_step.observations["current_player"]
