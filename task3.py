@@ -29,22 +29,23 @@ from open_spiel.python.algorithms import tabular_qlearner, random_agent
 def eval_against_random_bots(env, trained_agent, num_episodes):
     """Evaluates `trained_agents` against `random_agents` for `num_episodes`."""
     wins = 0
-    for _ in range(num_episodes):             # todo swap who is player number one
+    for _ in range(num_episodes):
         time_step = env.reset()
+        who_random = random.choice([0, 1])
         while not time_step.step_type.last():
             pid = time_step.observations["current_player"]
 
-            if pid == 1:
-                action = trained_agent.step(time_step, is_evaluation=True).action
-                
-            else:
+            if pid == who_random:
                 legal_actions = time_step.observations['legal_actions'][pid]
                 action = random.choice(legal_actions)
+            else:
+                # legal_actions = time_step.observations['legal_actions'][pid]
+                # action = random.choice(legal_actions)
+                action = trained_agent.step(time_step, is_evaluation=True).action
 
-            # action = [trained_agent, random_agent][pid].step(time_step, is_evaluation=True).action
             time_step = env.step([action])
 
-        if time_step.rewards[0] > 0:
+        if time_step.rewards[1-who_random] > 0:
             wins += 1
     return wins / num_episodes
 
@@ -59,19 +60,23 @@ agents = [
 
 random_agent = random_agent.RandomAgent(player_id=0, num_actions=num_actions)
 
-for cur_episode in range(int(1e4)):
-    if cur_episode % int(1e3) == 0:
-        win_rates = eval_against_random_bots(env, agents[0], 1000)
+for cur_episode in range(int(1e6)):
+    if cur_episode % int(5e3) == 0:
+        win_rates = eval_against_random_bots(env, agents[0], 10000)
         print("episode " + str(cur_episode) + ": winrate " + str(win_rates))
     
-    time_step = env.reset()
+    time_step = env.reset() 
+    agents_order = random.sample(agents, 2)
     while not time_step.step_type.last():
         pid = time_step.observations["current_player"]
-        action = agents[pid].step(time_step).action
+        action = agents_order[pid].step(time_step).action
 
         time_step = env.step([action])
 
-    for agent in agents:
+    for agent in agents_order:
         agent.step(time_step)
 
-print(agents[0]._q_values)
+    # for stateKey, stateVal in agents[0]._q_values.items():
+    #     for key, val in stateVal.items():
+    #         print(stateKey, "||", key, val)
+    # print("------------------------------------------------")
