@@ -69,9 +69,10 @@ class Agent(pyspiel.Bot):
         :returns: The selected action from the legal actions, or
             `pyspiel.INVALID_ACTION` if there are no legal actions available.
         """
+        # for a in state.legal_actions():
+        #     print("", a, state.action_to_string(a))
         return random.choice(state.legal_actions())
-
-
+        
 def test_api_calls():
     """This method calls a number of API calls that are required for the
     tournament. It should not trigger any Exceptions.

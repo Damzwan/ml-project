@@ -22,7 +22,7 @@ from NFSPPolicies import NFSPPolicies
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer("num_train_episodes", int(1e6),
+flags.DEFINE_integer("num_train_episodes", int(1e4),
                      "Number of training episodes.")
 flags.DEFINE_integer("eval_every", 1000,
                      "Episode frequency at which the agents are evaluated.")
@@ -70,6 +70,7 @@ def main(unused_argv):
     for ep in range(FLAGS.num_train_episodes):
       if (ep + 1) % FLAGS.eval_every == 0:
         logging.info("Losses: %s", [agent.loss for agent in agents])
+        agents[0].save("./dqnout/")
         # expl = exploitability.exploitability(env.game, expl_policies_avg)
         # nash = exploitability.nash_conv(env.game, expl_policies_avg)
         # logging.info("[%s] Exploitability AVG %s, %s", ep + 1, expl, nash)
@@ -78,15 +79,12 @@ def main(unused_argv):
       time_step = env.reset()
       while not time_step.last():
         player_id = time_step.observations["current_player"]
-        agent_output = agents[player_id].step(time_step)
-        action_list = [agent_output.action]
-        time_step = env.step(action_list)
+        time_step = env.step([agents[player_id].step(time_step).action])
 
       # Episode is over, step all agents with final info state.
-      print(env._state)
       for agent in agents:
         agent.step(time_step)
-      exit()
+    
 
 
 if __name__ == "__main__":

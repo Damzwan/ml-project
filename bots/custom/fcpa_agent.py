@@ -14,7 +14,9 @@ import argparse
 import logging
 import numpy as np
 import pyspiel
-from open_spiel.python.algorithms import evaluate_bots
+from open_spiel.python.algorithms import evaluate_bots, dqn
+from open_spiel.python import rl_environment
+import tensorflow.compat.v1 as tf
 import random
 
 
@@ -45,13 +47,45 @@ class Agent(pyspiel.Bot):
         """
         pyspiel.Bot.__init__(self)
         self.player_id = player_id
+        print('ayayayyayay')
+
+        self.setNewEnv()
+        self.time_step = self.simulatedEnv.reset()
+
+        self.graph = tf.Graph()
+        sess = tf.Session(graph=self.graph)
+        sess.__enter__()
+        info_state_size = self.simulatedEnv.observation_spec()["info_state"][0]
+        num_actions = self.simulatedEnv.action_spec()["num_actions"]
+        with self.graph.as_default():
+            self.dqnAgent = dqn.DQN(sess, player_id, info_state_size, num_actions, 128, int(2e5))
+            self.dqnAgent.restore('D:/Winnie33/Documents/School_dump/ml-project/dqnout/') # todo make absolute, but automatic
+
+    def setNewEnv(self):
+        fcpa_game_string = (
+        "universal_poker(betting=nolimit,numPlayers=2,numRounds=4,blind=150 100,"
+        "firstPlayer=2 1 1 1,numSuits=4,numRanks=13,numHoleCards=2,numBoardCards=0 3 1 1,"
+        "stack=20000 20000,bettingAbstraction=fcpa)")
+        game = pyspiel.load_game(fcpa_game_string)
+        num_players = 2
+
+        env_configs = {"players": num_players}
+        env = rl_environment.Environment(game, **env_configs)
+        
+        self.simulatedEnv = env
+    
+    def processStepSimulatedEnv(self, action):
+        self.time_step = self.simulatedEnv.step([action])
+        if self.time_step.last():
+            self.dqnAgent.step(self.time_step) # update with last timestep, as usual
 
     def restart_at(self, state):
         """Starting a new game in the given state.
 
         :param state: The initial state of the game.
         """
-        pass
+        self.time_step = self.simulatedEnv.reset()
+
 
     def inform_action(self, state, player_id, action):
         """Let the bot know of the other agent's actions.
@@ -60,7 +94,7 @@ class Agent(pyspiel.Bot):
         :param player_id: The ID of the player that executed an action.
         :param action: The action which the player executed.
         """
-        pass
+        self.processStepSimulatedEnv(action)
 
     def step(self, state):
         """Returns the selected action in the given state.
@@ -68,10 +102,10 @@ class Agent(pyspiel.Bot):
         :param state: The current state of the game.
         :returns: The selected action from the legal actions, or
             `pyspiel.INVALID_ACTION` if there are no legal actions available.
-        """        
-        if 0 in state.legal_actions():
-            return 0
-        return 1
+        """
+        action = self.dqnAgent.step(self.time_step).action
+        self.processStepSimulatedEnv(action)
+        return action
 
 
 def test_api_calls():

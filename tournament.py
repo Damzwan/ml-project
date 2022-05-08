@@ -121,6 +121,7 @@ def cli(agent1_id, agent1_dir, agent2_id, agent2_dir, output, rounds, seed):
     results.to_csv(output, index=False)
     logger.info("Done. Results saved to {}".format(output))
 
+
 def printResultsOverview(results):
     # print("\n".join([str(x) for x in results]))
     reward_p1 = [result['return_p1'] for result in results]
@@ -130,13 +131,13 @@ def printResultsOverview(results):
 
 
 if __name__ == '__main__':
-    agent1 = 'bot1'
-    agent2 = 'bot2'
+    agent1 = 'custom'
+    agent2 = 'random'
 
-    agent1_dir = './bots/alwaysCall/'
-    agent2_dir = './bots/random/'
+    agent1_dir = './bots/' + agent1 + '/'
+    agent2_dir = './bots/' + agent2 + '/'
 
     output = 'output.csv'
-    rounds = 10000
+    rounds = 1
     seed = int(random.random()*100000)
     sys.exit(cli(agent1, agent1_dir, agent2, agent2_dir, output, rounds, seed))
