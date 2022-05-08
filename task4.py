@@ -11,7 +11,7 @@ import random
 from open_spiel.python.bots import human
 from open_spiel.python.bots import uniform_random
 from open_spiel.python import rl_environment
-from open_spiel.python.algorithms import tabular_qlearner, random_agent, exploitability, nfsp
+from open_spiel.python.algorithms import tabular_qlearner, random_agent, exploitability, dqn
 import pyspiel
 import logging
 from cProfile import run
@@ -62,22 +62,18 @@ def main(unused_argv):
   with tf.Session() as sess:
     # pylint: disable=g-complex-comprehension
     agents = [
-        nfsp.NFSP(sess, idx, info_state_size, num_actions, hidden_layers_sizes,
-                  FLAGS.reservoir_buffer_capacity, FLAGS.anticipatory_param,
-                  **kwargs) for idx in range(num_players)
+        dqn.DQN(sess, idx, info_state_size, num_actions, hidden_layers_sizes, FLAGS.replay_buffer_capacity) for idx
+        in range(num_players)
     ]
-    expl_policies_avg = NFSPPolicies(env, agents, nfsp.MODE.average_policy)
+    # expl_policies_avg = NFSPPolicies(env, agents)
 
-    sess.run(tf.global_variables_initializer())
     for ep in range(FLAGS.num_train_episodes):
-      print("ep", ep)
       if (ep + 1) % FLAGS.eval_every == 0:
-        losses = [agent.loss for agent in agents]
-        logging.info("Losses: %s", losses)
-        expl = exploitability.exploitability(env.game, expl_policies_avg)
-        nash = exploitability.nash_conv(env.game, expl_policies_avg)
-        logging.info("[%s] Exploitability AVG %s, %s", ep + 1, expl, nash)
-        logging.info("_____________________________________________")
+        logging.info("Losses: %s", [agent.loss for agent in agents])
+        # expl = exploitability.exploitability(env.game, expl_policies_avg)
+        # nash = exploitability.nash_conv(env.game, expl_policies_avg)
+        # logging.info("[%s] Exploitability AVG %s, %s", ep + 1, expl, nash)
+        # logging.info("_____________________________________________")
 
       time_step = env.reset()
       while not time_step.last():
@@ -87,8 +83,10 @@ def main(unused_argv):
         time_step = env.step(action_list)
 
       # Episode is over, step all agents with final info state.
+      print(env._state)
       for agent in agents:
         agent.step(time_step)
+      exit()
 
 
 if __name__ == "__main__":

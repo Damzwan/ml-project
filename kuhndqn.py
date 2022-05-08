@@ -92,12 +92,18 @@ def main(unused_argv):
   with tf.Session() as sess:
     # pylint: disable=g-complex-comprehension
     agents = [
-        dqn.DQN(sess, idx, info_state_size, num_actions, hidden_layers_sizes, FLAGS.replay_buffer_capacity) for idx
-        in range(num_players)
+        dqn.DQN(
+            session=sess,
+            player_id=idx,
+            state_representation_size=info_state_size,
+            num_actions=num_actions,
+            hidden_layers_sizes=hidden_layers_sizes,
+            replay_buffer_capacity=FLAGS.replay_buffer_capacity,
+            batch_size=FLAGS.batch_size) for idx in range(num_players)
     ]
     expl_policies_avg = NFSPPolicies(env, agents)
 
-    sess.run(tf.global_variables_initializer())
+
     for ep in range(FLAGS.num_train_episodes):
       if (ep + 1) % FLAGS.eval_every == 0:
         losses = [agent.loss for agent in agents]

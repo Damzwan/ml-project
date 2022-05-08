@@ -15,6 +15,7 @@ import logging
 import numpy as np
 import pyspiel
 from open_spiel.python.algorithms import evaluate_bots
+import random
 
 
 logger = logging.getLogger('be.kuleuven.cs.dtai.fcpa')
@@ -68,8 +69,7 @@ class Agent(pyspiel.Bot):
         :returns: The selected action from the legal actions, or
             `pyspiel.INVALID_ACTION` if there are no legal actions available.
         """
-        return 0
-        pass
+        return random.choice(state.legal_actions())
 
 
 def test_api_calls():
