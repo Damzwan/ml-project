@@ -10,64 +10,88 @@ import random
 
 from open_spiel.python.bots import human
 from open_spiel.python.bots import uniform_random
+from open_spiel.python import rl_environment
+from open_spiel.python.algorithms import tabular_qlearner, random_agent, exploitability, nfsp
 import pyspiel
+import logging
+from cProfile import run
+import tensorflow.compat.v1 as tf
 
-def LoadAgent(agent_type, game, player_id, rng):
-  """Return a bot based on the agent type."""
-  if agent_type == "random":
-    return uniform_random.UniformRandomBot(player_id, rng)
-  elif agent_type == "human":
-    return human.HumanBot()
-  elif agent_type == "check_call":
-    policy = pyspiel.PreferredActionPolicy([1, 0])
-    return pyspiel.make_policy_bot(game, player_id, rng, policy)
-  elif agent_type == "fold":
-    policy = pyspiel.PreferredActionPolicy([0, 1])
-    return pyspiel.make_policy_bot(game, player_id, rng, policy)
-  else:
-    raise RuntimeError("Unrecognized agent type: {}".format(agent_type))
+from NFSPPolicies import NFSPPolicies
 
-def runPokerGame(agents):
-  game = pyspiel.load_game(pyspiel.hunl_game_string("fcpa"))
-  state = game.new_initial_state()
 
-  print("INITIAL STATE")
-  print(str(state))
+FLAGS = flags.FLAGS
 
-  while not state.is_terminal():
-    current_player = state.current_player()
-    if state.is_chance_node():
-      # Chance node: sample an outcome
-      outcomes = state.chance_outcomes()
-      num_actions = len(outcomes)
-      print("Chance node with " + str(num_actions) + " outcomes")
-      action_list, prob_list = zip(*outcomes)
-      action = random.choices(action_list, weights=prob_list)[0]
-      print("Sampled outcome: ",
-            state.action_to_string(state.current_player(), action))
-      state.apply_action(action)
-    else:
-      legal_actions = state.legal_actions()
-      for action in legal_actions:
-        print("Legal action: {} ({})".format(
-            state.action_to_string(current_player, action), action))
-        
-      #action = agents[current_player].step(state)
-      action = random.choice(list(range(len(legal_actions))))
-      action_string = state.action_to_string(current_player, action)
-      print("Player ", current_player, ", chose action: ",
-            action_string)
-      state.apply_action(action)
+flags.DEFINE_integer("num_train_episodes", int(1e6),
+                     "Number of training episodes.")
+flags.DEFINE_integer("eval_every", 1000,
+                     "Episode frequency at which the agents are evaluated.")
+flags.DEFINE_list("hidden_layers_sizes", [
+    128,
+], "Number of hidden units in the avg-net and Q-net.")
+flags.DEFINE_integer("replay_buffer_capacity", int(2e5),
+                     "Size of the replay buffer.")
+flags.DEFINE_integer("reservoir_buffer_capacity", int(2e6),
+                     "Size of the reservoir buffer.")
+flags.DEFINE_float("anticipatory_param", 0.1,
+                   "Prob of using the rl best response as episode policy.")
 
-    print("")
-    print("NEXT STATE:")
-    print(str(state))
 
-  return state.returns()
-#   for pid in range(game.num_players()):
-#     print("Utility for player {} is {}".format(pid, returns[pid]))
+def main(unused_argv):
+  fcpa_game_string = (
+        "universal_poker(betting=nolimit,numPlayers=2,numRounds=4,blind=150 100,"
+        "firstPlayer=2 1 1 1,numSuits=4,numRanks=13,numHoleCards=2,numBoardCards=0 3 1 1,"
+        "stack=20000 20000,bettingAbstraction=fcpa)")
+  game = pyspiel.load_game(fcpa_game_string)
+  num_players = 2
+
+  env_configs = {"players": num_players}
+  env = rl_environment.Environment(game, **env_configs)
+  info_state_size = env.observation_spec()["info_state"][0]
+  num_actions = env.action_spec()["num_actions"]
+
+  hidden_layers_sizes = [int(l) for l in FLAGS.hidden_layers_sizes]
+  kwargs = {
+      "replay_buffer_capacity": FLAGS.replay_buffer_capacity,
+      "epsilon_decay_duration": FLAGS.num_train_episodes,
+      "epsilon_start": 0.06,
+      "epsilon_end": 0.001,
+  }
+
+
+  with tf.Session() as sess:
+    # pylint: disable=g-complex-comprehension
+    agents = [
+        nfsp.NFSP(sess, idx, info_state_size, num_actions, hidden_layers_sizes,
+                  FLAGS.reservoir_buffer_capacity, FLAGS.anticipatory_param,
+                  **kwargs) for idx in range(num_players)
+    ]
+    expl_policies_avg = NFSPPolicies(env, agents, nfsp.MODE.average_policy)
+
+    sess.run(tf.global_variables_initializer())
+    for ep in range(FLAGS.num_train_episodes):
+      print("ep", ep)
+      if (ep + 1) % FLAGS.eval_every == 0:
+        losses = [agent.loss for agent in agents]
+        logging.info("Losses: %s", losses)
+        expl = exploitability.exploitability(env.game, expl_policies_avg)
+        nash = exploitability.nash_conv(env.game, expl_policies_avg)
+        logging.info("[%s] Exploitability AVG %s, %s", ep + 1, expl, nash)
+        logging.info("_____________________________________________")
+
+      time_step = env.reset()
+      while not time_step.last():
+        player_id = time_step.observations["current_player"]
+        agent_output = agents[player_id].step(time_step)
+        action_list = [agent_output.action]
+        time_step = env.step(action_list)
+
+      # Episode is over, step all agents with final info state.
+      for agent in agents:
+        agent.step(time_step)
 
 
 if __name__ == "__main__":
-  agents = [LoadAgent("random", 'fcpa', i, 1234) for i in range(2)]
-  runPokerGame(agents)
+  app.run(main)
+  # agents = [LoadAgent("random", 'fcpa', i, 1234) for i in range(2)]
+  # runPokerGame(agents)

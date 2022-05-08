@@ -23,6 +23,8 @@ from absl import flags
 from absl import logging
 import tensorflow.compat.v1 as tf
 
+import matplotlib.pyplot as plt
+
 from open_spiel.python import policy
 from open_spiel.python import rl_environment
 from open_spiel.python.algorithms import exploitability
@@ -30,8 +32,8 @@ from open_spiel.python.algorithms import policy_gradient
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer("num_episodes", int(1e6), "Number of train episodes.")
-flags.DEFINE_integer("eval_every", int(1e4), "Eval agents every x episodes.")
+flags.DEFINE_integer("num_episodes", int(1e7), "Number of train episodes.")
+flags.DEFINE_integer("eval_every", int(25000), "Eval agents every x episodes.")
 flags.DEFINE_enum("loss_str", "rpg", ["a2c", "rpg", "qpg", "rm"],
                   "PG loss to use.")
 
@@ -72,6 +74,10 @@ def main(_):
   info_state_size = env.observation_spec()["info_state"][0]
   num_actions = env.action_spec()["num_actions"]
 
+  expls = []
+  nashs = []
+  iterations = []
+
   with tf.Session() as sess:
     # pylint: disable=g-complex-comprehension
     agents = [
@@ -88,9 +94,13 @@ def main(_):
     sess.run(tf.global_variables_initializer())
     for ep in range(FLAGS.num_episodes):
 
-      if (ep + 1) % FLAGS.eval_every == 0:
+      if (ep + 1) % FLAGS.eval_every == 0 and ep > 10000:
         losses = [agent.loss for agent in agents]
         expl = exploitability.exploitability(env.game, expl_policies_avg)
+        nash = exploitability.nash_conv(env.game, expl_policies_avg)
+        expls.append(expl)
+        nashs.append(nash)
+        iterations.append(ep+1)
         msg = "-" * 80 + "\n"
         msg += "{}: {}\n{}\n".format(ep + 1, expl, losses)
         logging.info("%s", msg)
@@ -105,6 +115,11 @@ def main(_):
       # Episode is over, step all agents with final info state.
       for agent in agents:
         agent.step(time_step)
+
+  plt.plot(iterations, expls, label="Exploitability")
+  plt.plot(iterations, nashs, label="NashConv")
+  plt.legend()
+  plt.savefig('task3_policy.png')
 
 
 if __name__ == "__main__":
