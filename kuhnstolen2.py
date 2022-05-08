@@ -29,11 +29,13 @@ from open_spiel.python import rl_environment
 from open_spiel.python.algorithms import exploitability
 from open_spiel.python.algorithms import nfsp
 
+import matplotlib.pyplot as plt
+
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer("num_train_episodes", int(3e6),
+flags.DEFINE_integer("num_train_episodes", int(1e7),
                      "Number of training episodes.")
-flags.DEFINE_integer("eval_every", 10000,
+flags.DEFINE_integer("eval_every", 25000,
                      "Episode frequency at which the agents are evaluated.")
 flags.DEFINE_list("hidden_layers_sizes", [
     128,
@@ -92,6 +94,10 @@ def main(unused_argv):
       "epsilon_end": 0.001,
   }
 
+  expls = []
+  nashs = []
+  iterations = []
+
   with tf.Session() as sess:
     # pylint: disable=g-complex-comprehension
     agents = [
@@ -103,11 +109,15 @@ def main(unused_argv):
 
     sess.run(tf.global_variables_initializer())
     for ep in range(FLAGS.num_train_episodes):
-      if (ep + 1) % FLAGS.eval_every == 0:
+      if (ep + 1) % FLAGS.eval_every == 0 and ep > 10000:
         losses = [agent.loss for agent in agents]
         logging.info("Losses: %s", losses)
         expl = exploitability.exploitability(env.game, expl_policies_avg)
-        logging.info("[%s] Exploitability AVG %s WR %s", ep + 1, expl)
+        nash = exploitability.nash_conv(env.game, expl_policies_avg)
+        expls.append(expl)
+        nashs.append(nash)
+        iterations.append(ep+1)
+        logging.info("[%s] Exploitability AVG %s, %s", ep + 1, expl, nash)
         logging.info("_____________________________________________")
 
       time_step = env.reset()
@@ -120,6 +130,11 @@ def main(unused_argv):
       # Episode is over, step all agents with final info state.
       for agent in agents:
         agent.step(time_step)
+
+  plt.plot(iterations, expls, label="Exploitability")
+  plt.plot(iterations, nashs, label="NashConv")
+  plt.legend()
+  plt.savefig('task3_2.png')
 
 
 if __name__ == "__main__":
