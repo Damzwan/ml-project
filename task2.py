@@ -3,6 +3,7 @@ import logging
 import pyspiel
 
 from open_spiel.python.egt import dynamics
+from open_spiel.python.egt.dynamics import boltzmannq
 from open_spiel.python.egt.visualization import Dynamics2x2Axes, _eval_dynamics_2x2_grid, Dynamics3x3Axes
 from open_spiel.python.utils import file_utils
 from absl import app
@@ -131,6 +132,83 @@ def subtask1():
         print(agent._q_values)
 
 
+class MultiPopulationDynamicsLenientBoltzman(object):
+    def __init__(self, payoff_tensor, dynamics):
+        """Initializes the multi-population dynamics."""
+        if isinstance(dynamics, list) or isinstance(dynamics, tuple):
+            assert payoff_tensor.shape[0] == len(dynamics)
+        else:
+            dynamics = [dynamics] * payoff_tensor.shape[0]
+        self.payoff_tensor = payoff_tensor
+        self.dynamics = dynamics
+        self.k = 1
+
+    def fitness_calc(self, n, p, ks, states, payoff):
+        payoff = np.moveaxis(payoff[p], p, 0)
+        fitness = np.zeros(shape=ks[p])
+        # for each action
+        for i in range(ks[p]):
+            # for all other players
+            p_ = abs(1 - p)  # FOR 2 PLAYERS ONLY
+            u_i = 0
+            # for each action each other player can take:
+            for j in range(ks[p_]):
+                strictworse_actions = 0  # k:Aik<Aij
+                worse_actions = 0  # k:Aik≤Aij
+                equal_actions = 0  # k:Aik==Aij
+                # iterate over all actions the other player could have taken
+                for k in range(ks[p_]):
+                    if payoff[i][k] < payoff[i][j]:
+                        strictworse_actions += (states[p_][k])
+                        worse_actions += (states[p_][k])
+                    elif payoff[i][k] == payoff[i][j]:
+                        worse_actions += (states[p_][k])
+                        equal_actions += (states[p_][k])
+                ## u_i = sum_j (PayoffMatrix(P1)[j]        * ActionProb(P2)[j] * [sum_k:Aik≤Aij(ActionProb(P2)[k])**k - sum_k:Aik<Aij(ActionProb(P2)[k])**k] / sum_k:Aik=Aij(ActionProb(P2)[k])
+                u_i += payoff[i][j] * states[p_][j] * (
+                            worse_actions ** self.k - strictworse_actions ** self.k) / equal_actions
+            fitness[i] = u_i
+        return fitness
+
+    def lenient_boltzmannq(self, state, payoff):
+        res = []
+
+        for i in range(len(state)):
+            u = 0
+            for j in range(len(state)):
+                first_term = payoff[i][j] * state[j]
+                candidate_values = payoff[i][payoff[i][:] <= payoff[i][j]]
+
+                indices_smaller_or_eq = np.argwhere(candidate_values[:] <= payoff[i][j]).flatten()
+                indices_smaller = np.argwhere(candidate_values[:] < payoff[i][j]).flatten()
+                indices_eq = np.argwhere(candidate_values[:] == payoff[i][j]).flatten()
+
+                second_term = (np.sum(state[indices_smaller_or_eq]) - np.sum(state[indices_smaller])) / np.sum(
+                    state[indices_eq])
+
+                u += first_term * second_term
+
+            res.append(u)
+
+        return res
+
+    def __call__(self, state, time=None):
+        state = np.array(state)
+        n = self.payoff_tensor.shape[0]  # number of players
+        ks = self.payoff_tensor.shape[1:]  # number of strategies for each player
+        assert state.shape[0] == sum(ks)
+
+        states = np.split(state, np.cumsum(ks)[:-1])
+        dstates = [None] * n
+        for i in range(n):
+            fitness = self.lenient_boltzmannq(states[i], self.payoff_tensor[i])
+            f2 = self.fitness_calc(n, i, ks, states, self.payoff_tensor)
+            print(fitness, f2)
+            dstates[i] = self.dynamics[i](states[i], fitness)
+
+        return np.concatenate(dstates)
+
+
 def subtask2():
     game = battle_of_sexes_game
     rd = dynamics.boltzmannq
@@ -138,7 +216,8 @@ def subtask2():
     payoff_matrix = game_payoffs_array(game)
 
     if game_size == 2:
-        dyn = dynamics.MultiPopulationDynamics(payoff_matrix, rd)
+        # dyn = dynamics.MultiPopulationDynamics(payoff_matrix, rd)
+        dyn = MultiPopulationDynamicsLenientBoltzman(payoff_matrix, rd)
         visualiser = Dynamics2x2Axes(plt.figure(), [0, 0, 1, 1])
         visualiser.streamplot(dyn)
 
@@ -149,7 +228,6 @@ def subtask2():
         dyn = dynamics.SinglePopulationDynamics(payoff_matrix, rd)
         visualiser = Dynamics3x3Axes(plt.figure(), [0, 0, 1, 1])
         visualiser.streamplot(dyn)
-
 
 
 def main(_):
