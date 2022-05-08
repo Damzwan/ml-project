@@ -3,6 +3,7 @@ import logging
 import pyspiel
 
 from open_spiel.python.egt import dynamics
+from open_spiel.python.egt.dynamics import boltzmannq
 from open_spiel.python.egt.visualization import Dynamics2x2Axes, _eval_dynamics_2x2_grid, Dynamics3x3Axes
 from open_spiel.python.utils import file_utils
 from absl import app
@@ -131,25 +132,75 @@ def subtask1():
         print(agent._q_values)
 
 
+class MultiPopulationDynamicsLenientBoltzman(object):
+    def __init__(self, payoff_tensor, dynamics):
+        """Initializes the multi-population dynamics."""
+        if isinstance(dynamics, list) or isinstance(dynamics, tuple):
+            assert payoff_tensor.shape[0] == len(dynamics)
+        else:
+            dynamics = [dynamics] * payoff_tensor.shape[0]
+        self.payoff_tensor = payoff_tensor
+        self.dynamics = dynamics
+        self.k = 1
+
+    def lenient_boltzmannq(self, state, payoff):
+        res = []
+
+        for i in range(len(state)):
+            u = 0
+            for j in range(len(state)):
+                first_term = payoff[i][j] * state[j]
+                candidate_values = payoff[i][payoff[i][:] <= payoff[i][j]]
+
+                indices_smaller_or_eq = np.argwhere(candidate_values[:] <= payoff[i][j]).flatten()
+                indices_smaller = np.argwhere(candidate_values[:] < payoff[i][j]).flatten()
+                indices_eq = np.argwhere(candidate_values[:] == payoff[i][j]).flatten()
+
+                second_term = (np.sum(state[indices_smaller_or_eq]) - np.sum(state[indices_smaller])) / np.sum(
+                    state[indices_eq])
+
+                u += first_term * second_term
+
+            res.append(u)
+
+        return res
+
+    def __call__(self, state, time=None):
+        state = np.array(state)
+        n = self.payoff_tensor.shape[0]  # number of players
+        ks = self.payoff_tensor.shape[1:]  # number of strategies for each player
+        assert state.shape[0] == sum(ks)
+
+        states = np.split(state, np.cumsum(ks)[:-1])
+        dstates = [None] * n
+        for i in range(n):
+            payoff = np.moveaxis(self.payoff_tensor[i], i, 0)
+            fitness = self.lenient_boltzmannq(states[1 - i], payoff)
+            dstates[i] = self.dynamics[i](states[i], fitness)
+
+        return np.concatenate(dstates)
+
+
 def subtask2():
-    game = rps_game
+    game = dispersion_game
     rd = dynamics.boltzmannq
     game_size = game.num_rows()
     payoff_matrix = game_payoffs_array(game)
 
     if game_size == 2:
-        dyn = dynamics.MultiPopulationDynamics(payoff_matrix, rd)
+        # dyn = dynamics.MultiPopulationDynamics(payoff_matrix, rd)
+        dyn = MultiPopulationDynamicsLenientBoltzman(payoff_matrix, rd)
         visualiser = Dynamics2x2Axes(plt.figure(), [0, 0, 1, 1])
         visualiser.streamplot(dyn)
 
         x, y, u, v = _eval_dynamics_2x2_grid(dyn, 50)
         plt.streamplot(x, y, u, v)
         plt.savefig("q.png")
+        plt.show()
     elif game_size == 3:
         dyn = dynamics.SinglePopulationDynamics(payoff_matrix, rd)
         visualiser = Dynamics3x3Axes(plt.figure(), [0, 0, 1, 1])
         visualiser.streamplot(dyn)
-
 
 
 def main(_):
