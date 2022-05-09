@@ -17,7 +17,7 @@ import pyspiel
 from open_spiel.python.algorithms import evaluate_bots, dqn
 from open_spiel.python import rl_environment
 import tensorflow.compat.v1 as tf
-import random, os, copy
+import os, copy
 
 
 logger = logging.getLogger('be.kuleuven.cs.dtai.fcpa')
@@ -114,13 +114,14 @@ class Agent(pyspiel.Bot):
         stato = copy.deepcopy(state)
         self.updateSimulatedEnv(stato)
         time_step = self.simulatedEnv.get_time_step()
-        action = self.dqnAgent.step(time_step).action
+        action = self.dqnAgent.step(time_step, is_evaluation=True).action
         if self.verbose:
             print("custom chose action ", stato.action_to_string(action))
         
-        time_step = self.simulatedEnv.step([action])
-        if time_step.last():
-            self.dqnAgent.step(time_step) # update with last timestep, as usual;p
+        # uncomment to train
+        # time_step = self.simulatedEnv.step([action])
+        # if time_step.last():
+        #     self.dqnAgent.step(time_step) # update with last timestep, as usual
         return action
 
     def updateSimulatedEnv(self, state):

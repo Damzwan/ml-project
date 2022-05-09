@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from calendar import SATURDAY
 
 from absl import app
 
@@ -13,10 +14,11 @@ import tensorflow.compat.v1 as tf
 import os
 
 
-NUM_TRAIN_EPISODES = int(2e3)
-EVAL_EVERY = 500
+NUM_TRAIN_EPISODES = 2000000
+EVAL_EVERY = 1000
+SAVE_EVERY = 5000
 HIDDEN_LAYERS_SIZES = [128]
-REPLAY_BUFFER_CAPACITY = int(2e5)                 
+REPLAY_BUFFER_CAPACITY = int(6e3)  # 1e3 ~= 650MB  -> don't overdo!          
 RESERVOIR_BUFFER_CAPACITY = int(2e6)                                    
 ANTICITORY_PARAM = 0.1
                   
@@ -55,7 +57,9 @@ def main(unused_argv):
 
     for ep in range(NUM_TRAIN_EPISODES):
       if (ep + 1) % EVAL_EVERY == 0:
-        logging.info("Losses: %s", [agent.loss for agent in agents])
+        logging.info("[%s] Losses: %s", ep+1, [agent.loss for agent in agents])
+
+      if (ep + 1) % SAVE_EVERY == 0:
         agents[0].save(dqnout)
         agents[1].save(dqnout)
 
@@ -64,7 +68,6 @@ def main(unused_argv):
         player_id = time_step.observations["current_player"]
         time_step = env.step([agents[player_id].step(time_step).action])
 
-      # Episode is over, step all agents with final info state.
       for agent in agents:
         agent.step(time_step)
 

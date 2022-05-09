@@ -127,17 +127,17 @@ def printResultsOverview(results):
     reward_p1 = [result['return_p1'] for result in results]
     reward_p2 = [result['return_p2'] for result in results]
     logger.info("Player 0 won %s%s of games", 100*len([x for x in reward_p1 if x > 0])/len(results), '%')
-    logger.info("Average reward for player 0 was %s", sum(reward_p1)/len(results))
+    logger.info("Average reward for player 0 was %s (vs %s)", sum(reward_p1)/len(results), sum(reward_p2)/len(results))
 
 
 if __name__ == '__main__':
     agent1 = 'custom'
-    agent2 = 'random'
+    agent2 = 'alwaysCall'
 
     agent1_dir = './bots/' + agent1 + '/'
     agent2_dir = './bots/' + agent2 + '/'
 
     output = 'output.csv'
-    rounds = 1000
+    rounds = 5000
     seed = int(random.random()*100000)
     sys.exit(cli(agent1, agent1_dir, agent2, agent2_dir, output, rounds, seed))
