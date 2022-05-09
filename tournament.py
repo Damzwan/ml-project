@@ -52,7 +52,7 @@ def play_match(game, agent1, agent2, seed=1234, rounds=100):
     results = []
     for _ in tqdm(range(rounds)):
         # Alternate between the two agents as p1 and p2
-        for (p1, p2) in [(agent1, agent2), (agent2, agent1)]:
+        for (p1, p2) in [(agent1, agent2)]:#, (agent2, agent1)]:
             try:
                 returns = evaluate_bots(
                         game.new_initial_state(),
@@ -126,7 +126,7 @@ def printResultsOverview(results):
     # print("\n".join([str(x) for x in results]))
     reward_p1 = [result['return_p1'] for result in results]
     reward_p2 = [result['return_p2'] for result in results]
-    logger.info("Player 0 won %s of the games", 100*len([x for x in reward_p1 if x > 0])/len(results))
+    logger.info("Player 0 won %s%s of games", 100*len([x for x in reward_p1 if x > 0])/len(results), '%')
     logger.info("Average reward for player 0 was %s", sum(reward_p1)/len(results))
 
 
@@ -138,6 +138,6 @@ if __name__ == '__main__':
     agent2_dir = './bots/' + agent2 + '/'
 
     output = 'output.csv'
-    rounds = 1
+    rounds = 1000
     seed = int(random.random()*100000)
     sys.exit(cli(agent1, agent1_dir, agent2, agent2_dir, output, rounds, seed))

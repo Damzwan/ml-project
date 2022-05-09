@@ -17,7 +17,7 @@ import pyspiel
 from open_spiel.python.algorithms import evaluate_bots, dqn
 from open_spiel.python import rl_environment
 import tensorflow.compat.v1 as tf
-import random
+import random, os, copy
 
 
 logger = logging.getLogger('be.kuleuven.cs.dtai.fcpa')
@@ -47,19 +47,22 @@ class Agent(pyspiel.Bot):
         """
         pyspiel.Bot.__init__(self)
         self.player_id = player_id
-        print('ayayayyayay')
+        if player_id == 1: # todo make player 2 loadable
+            return
+
+        self.verbose = False
 
         self.setNewEnv()
-        self.time_step = self.simulatedEnv.reset()
+        info_state_size = self.simulatedEnv.observation_spec()["info_state"][0]
+        num_actions = self.simulatedEnv.action_spec()["num_actions"]
 
         self.graph = tf.Graph()
         sess = tf.Session(graph=self.graph)
         sess.__enter__()
-        info_state_size = self.simulatedEnv.observation_spec()["info_state"][0]
-        num_actions = self.simulatedEnv.action_spec()["num_actions"]
         with self.graph.as_default():
+            dqnout = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
             self.dqnAgent = dqn.DQN(sess, player_id, info_state_size, num_actions, 128, int(2e5))
-            self.dqnAgent.restore('D:/Winnie33/Documents/School_dump/ml-project/dqnout/') # todo make absolute, but automatic
+            self.dqnAgent.restore(dqnout)
 
     def setNewEnv(self):
         fcpa_game_string = (
@@ -73,18 +76,17 @@ class Agent(pyspiel.Bot):
         env = rl_environment.Environment(game, **env_configs)
         
         self.simulatedEnv = env
-    
-    def processStepSimulatedEnv(self, action):
-        self.time_step = self.simulatedEnv.step([action])
-        if self.time_step.last():
-            self.dqnAgent.step(self.time_step) # update with last timestep, as usual
+          
 
     def restart_at(self, state):
         """Starting a new game in the given state.
 
         :param state: The initial state of the game.
         """
-        self.time_step = self.simulatedEnv.reset()
+        if self.verbose:
+            print("restarting....")
+        if not self.simulatedEnv:
+            self.setNewEnv()
 
 
     def inform_action(self, state, player_id, action):
@@ -94,7 +96,9 @@ class Agent(pyspiel.Bot):
         :param player_id: The ID of the player that executed an action.
         :param action: The action which the player executed.
         """
-        self.processStepSimulatedEnv(action)
+        if self.verbose:
+            print("informed of action", state.action_to_string(action))
+        
 
     def step(self, state):
         """Returns the selected action in the given state.
@@ -103,10 +107,24 @@ class Agent(pyspiel.Bot):
         :returns: The selected action from the legal actions, or
             `pyspiel.INVALID_ACTION` if there are no legal actions available.
         """
-        action = self.dqnAgent.step(self.time_step).action
-        self.processStepSimulatedEnv(action)
+        # a = random.choice(state.legal_actions())
+        # print("custom chooses", state.action_to_string(a))
+        # return a
+        
+        stato = copy.deepcopy(state)
+        self.updateSimulatedEnv(stato)
+        time_step = self.simulatedEnv.get_time_step()
+        action = self.dqnAgent.step(time_step).action
+        if self.verbose:
+            print("custom chose action ", stato.action_to_string(action))
+        
+        time_step = self.simulatedEnv.step([action])
+        if time_step.last():
+            self.dqnAgent.step(time_step) # update with last timestep, as usual;p
         return action
 
+    def updateSimulatedEnv(self, state):
+        self.simulatedEnv.set_state(state)
 
 def test_api_calls():
     """This method calls a number of API calls that are required for the

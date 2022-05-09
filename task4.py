@@ -4,38 +4,22 @@ from __future__ import division
 from __future__ import print_function
 
 from absl import app
-from absl import flags
-import numpy as np
-import random
 
-from open_spiel.python.bots import human
-from open_spiel.python.bots import uniform_random
 from open_spiel.python import rl_environment
-from open_spiel.python.algorithms import tabular_qlearner, random_agent, exploitability, dqn
+from open_spiel.python.algorithms import dqn
 import pyspiel
 import logging
-from cProfile import run
 import tensorflow.compat.v1 as tf
+import os
 
-from NFSPPolicies import NFSPPolicies
 
-
-FLAGS = flags.FLAGS
-
-flags.DEFINE_integer("num_train_episodes", int(1e4),
-                     "Number of training episodes.")
-flags.DEFINE_integer("eval_every", 1000,
-                     "Episode frequency at which the agents are evaluated.")
-flags.DEFINE_list("hidden_layers_sizes", [
-    128,
-], "Number of hidden units in the avg-net and Q-net.")
-flags.DEFINE_integer("replay_buffer_capacity", int(2e5),
-                     "Size of the replay buffer.")
-flags.DEFINE_integer("reservoir_buffer_capacity", int(2e6),
-                     "Size of the reservoir buffer.")
-flags.DEFINE_float("anticipatory_param", 0.1,
-                   "Prob of using the rl best response as episode policy.")
-
+NUM_TRAIN_EPISODES = int(2e3)
+EVAL_EVERY = 500
+HIDDEN_LAYERS_SIZES = [128]
+REPLAY_BUFFER_CAPACITY = int(2e5)                 
+RESERVOIR_BUFFER_CAPACITY = int(2e6)                                    
+ANTICITORY_PARAM = 0.1
+                  
 
 def main(unused_argv):
   fcpa_game_string = (
@@ -50,31 +34,30 @@ def main(unused_argv):
   info_state_size = env.observation_spec()["info_state"][0]
   num_actions = env.action_spec()["num_actions"]
 
-  hidden_layers_sizes = [int(l) for l in FLAGS.hidden_layers_sizes]
+  hidden_layers_sizes = [int(l) for l in HIDDEN_LAYERS_SIZES]
   kwargs = {
-      "replay_buffer_capacity": FLAGS.replay_buffer_capacity,
-      "epsilon_decay_duration": FLAGS.num_train_episodes,
+      "replay_buffer_capacity": REPLAY_BUFFER_CAPACITY,
+      "epsilon_decay_duration": NUM_TRAIN_EPISODES,
       "epsilon_start": 0.06,
       "epsilon_end": 0.001,
   }
 
+  dqnout = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bots', 'custom', 'models')
 
-  with tf.Session() as sess:
-    # pylint: disable=g-complex-comprehension
+  graph = tf.Graph()
+  sess = tf.Session(graph=graph)
+  sess.__enter__()
+  with graph.as_default():
     agents = [
-        dqn.DQN(sess, idx, info_state_size, num_actions, hidden_layers_sizes, FLAGS.replay_buffer_capacity) for idx
+        dqn.DQN(sess, idx, info_state_size, num_actions, hidden_layers_sizes, REPLAY_BUFFER_CAPACITY) for idx
         in range(num_players)
     ]
-    # expl_policies_avg = NFSPPolicies(env, agents)
 
-    for ep in range(FLAGS.num_train_episodes):
-      if (ep + 1) % FLAGS.eval_every == 0:
+    for ep in range(NUM_TRAIN_EPISODES):
+      if (ep + 1) % EVAL_EVERY == 0:
         logging.info("Losses: %s", [agent.loss for agent in agents])
-        agents[0].save("./dqnout/")
-        # expl = exploitability.exploitability(env.game, expl_policies_avg)
-        # nash = exploitability.nash_conv(env.game, expl_policies_avg)
-        # logging.info("[%s] Exploitability AVG %s, %s", ep + 1, expl, nash)
-        # logging.info("_____________________________________________")
+        agents[0].save(dqnout)
+        agents[1].save(dqnout)
 
       time_step = env.reset()
       while not time_step.last():
@@ -84,8 +67,24 @@ def main(unused_argv):
       # Episode is over, step all agents with final info state.
       for agent in agents:
         agent.step(time_step)
-    
 
+  # print("first")
+  # player_id = 0
+  # graph = tf.Graph()
+  # sess = tf.Session(graph=graph)
+  # sess.__enter__()
+  # with graph.as_default():
+  #     dqnAgent = dqn.DQN(sess, player_id, info_state_size, num_actions, 128, int(2e5))
+  #     dqnAgent.restore(dqnout)
+
+  # print('second')
+  # player_id = 1
+  # graph = tf.Graph()
+  # sess = tf.Session(graph=graph)
+  # sess.__enter__()
+  # with graph.as_default():
+  #     dqnAgent = dqn.DQN(sess, player_id, info_state_size, num_actions, 128, int(2e5))
+  #     dqnAgent.restore(dqnout)
 
 if __name__ == "__main__":
   app.run(main)
