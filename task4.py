@@ -12,13 +12,14 @@ import pyspiel
 import logging
 import tensorflow.compat.v1 as tf
 import os
+from numpy import format_float_scientific
 
 
 NUM_TRAIN_EPISODES = 2000000
 EVAL_EVERY = 1000
 SAVE_EVERY = 5000
 HIDDEN_LAYERS_SIZES = [128]
-REPLAY_BUFFER_CAPACITY = int(6e3)  # 1e3 ~= 650MB  -> don't overdo!          
+REPLAY_BUFFER_CAPACITY = int(10e3)  # 1e3 ~= 650MB  -> don't overdo!          
 RESERVOIR_BUFFER_CAPACITY = int(2e6)                                    
 ANTICITORY_PARAM = 0.1
                   
@@ -35,14 +36,7 @@ def main(unused_argv):
   env = rl_environment.Environment(game, **env_configs)
   info_state_size = env.observation_spec()["info_state"][0]
   num_actions = env.action_spec()["num_actions"]
-
   hidden_layers_sizes = [int(l) for l in HIDDEN_LAYERS_SIZES]
-  kwargs = {
-      "replay_buffer_capacity": REPLAY_BUFFER_CAPACITY,
-      "epsilon_decay_duration": NUM_TRAIN_EPISODES,
-      "epsilon_start": 0.06,
-      "epsilon_end": 0.001,
-  }
 
   dqnout = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bots', 'custom', 'models')
 
@@ -51,17 +45,32 @@ def main(unused_argv):
   sess.__enter__()
   with graph.as_default():
     agents = [
-        dqn.DQN(sess, idx, info_state_size, num_actions, hidden_layers_sizes, REPLAY_BUFFER_CAPACITY) for idx
+        dqn.DQN(sess, 
+                idx, 
+                info_state_size, 
+                num_actions, 
+                hidden_layers_sizes, 
+                REPLAY_BUFFER_CAPACITY,
+                epsilon_start=0.8, 
+                epsilon_end=0.001,
+                learn_every=100,
+                optimizer_str='adam',
+                loss_str='mse',
+                min_buffer_size_to_learn=800) for idx
         in range(num_players)
     ]
+    sess.run(tf.global_variables_initializer())
+
+    bestLoss = float('inf')
 
     for ep in range(NUM_TRAIN_EPISODES):
       if (ep + 1) % EVAL_EVERY == 0:
-        logging.info("[%s] Losses: %s", ep+1, [agent.loss for agent in agents])
+        logging.info("[%s] Losses: %s (%s)", ep+1, [agent.loss for agent in agents], [format_float_scientific(agent.loss, precision=1) for agent in agents])
 
-      if (ep + 1) % SAVE_EVERY == 0:
-        agents[0].save(dqnout)
-        agents[1].save(dqnout)
+        if agents[0].loss < bestLoss: #(ep + 1) % SAVE_EVERY == 0:
+          bestLoss = agents[0].loss
+          agents[0].save(dqnout)
+          agents[1].save(dqnout)
 
       time_step = env.reset()
       while not time_step.last():
