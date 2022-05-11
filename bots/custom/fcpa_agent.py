@@ -35,10 +35,14 @@ def get_agent_for_tournament(player_id):
     return my_player
 
 
+def createAgentFromDQN(player_id, dqnObject):
+    my_player = Agent(player_id, dqnObject)
+    return my_player
+
 class Agent(pyspiel.Bot):
     """Agent template"""
 
-    def __init__(self, player_id):
+    def __init__(self, player_id, dqnObject=None):
         """Initialize an agent to play FCPA poker.
 
         Note: This agent should make use of a pre-trained policy to enter
@@ -55,6 +59,10 @@ class Agent(pyspiel.Bot):
         self.setNewEnv()
         info_state_size = self.simulatedEnv.observation_spec()["info_state"][0]
         num_actions = self.simulatedEnv.action_spec()["num_actions"]
+
+        if dqnObject:
+            self.dqnAgent = dqnObject
+            return
 
         self.graph = tf.Graph()
         sess = tf.Session(graph=self.graph)

@@ -131,13 +131,13 @@ def printResultsOverview(results):
 
 
 if __name__ == '__main__':
-    agent1 = 'custom'
-    agent2 = 'alwaysCall'
+    agent1 = 'random'
+    agent2 = 'random'
 
     agent1_dir = './bots/' + agent1 + '/'
     agent2_dir = './bots/' + agent2 + '/'
 
     output = 'output.csv'
-    rounds = 10000
+    rounds = 200000
     seed = int(random.random()*100000)
     sys.exit(cli(agent1, agent1_dir, agent2, agent2_dir, output, rounds, seed))
