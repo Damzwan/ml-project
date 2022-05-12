@@ -1,4 +1,3 @@
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -18,27 +17,28 @@ from open_spiel.python.algorithms.evaluate_bots import evaluate_bots
 from tournament import load_agent_from_dir
 from fcpa_agent_temp import createAgentFromDQN
 
-
 NUM_TRAIN_EPISODES = 2000000
 EVAL_EVERY = 100
 SAVE_EVERY = 50000
 HIDDEN_LAYERS_SIZES = [128]
 REPLAY_BUFFER_CAPACITY = int(10e3)  # 1e3 ~= 650MB  -> don't overdo!          
-RESERVOIR_BUFFER_CAPACITY = int(2e6)          
+RESERVOIR_BUFFER_CAPACITY = int(2e6)
 
 import os, sys
-                  
+
+
 def getAverageScore(game, agents, random_agents, num_rounds):
-  results = [[], []]
-  agents = [createAgentFromDQN(0, agents[0]), createAgentFromDQN(1, agents[1])]
-  random_agents = [random_agents['agent_p1'], random_agents['agent_p2']]
+    results = [[], []]
+    agents = [createAgentFromDQN(0, agents[0]), createAgentFromDQN(1, agents[1])]
+    random_agents = [random_agents['agent_p1'], random_agents['agent_p2']]
 
-  for (p1, p2) in [(agents[0], random_agents[1]), (random_agents[0], agents[1])]:
-    for _ in range(num_rounds):
-      returns = evaluate_bots(game.new_initial_state(), [p1, p2], np.random)
-      results[p1==random_agents[0]].append(returns[p1==random_agents[0]])
+    for (p1, p2) in [(agents[0], random_agents[1]), (random_agents[0], agents[1])]:
+        for _ in range(num_rounds):
+            returns = evaluate_bots(game.new_initial_state(), [p1, p2], np.random)
+            results[p1 == random_agents[0]].append(returns[p1 == random_agents[0]])
 
-  return [sum(x)/len(x) for x in results]
+    return [sum(x) / len(x) for x in results]
+
 
 def main(unused_argv):
   fcpa_game_string = (
@@ -88,7 +88,7 @@ def main(unused_argv):
         for playerIndex in range(2):
           if avg[playerIndex] > bestAverage[playerIndex]:
             bestAverage[playerIndex] = avg[playerIndex]
-            agent[playerIndex].save(dqnout)
+            agents[playerIndex].save(dqnout)
 
       time_step = env.reset()
       while not time_step.last():
@@ -98,25 +98,8 @@ def main(unused_argv):
       for agent in agents:
         agent.step(time_step)
 
-  # print("first")
-  # player_id = 0
-  # graph = tf.Graph()
-  # sess = tf.Session(graph=graph)
-  # sess.__enter__()
-  # with graph.as_default():
-  #     dqnAgent = dqn.DQN(sess, player_id, info_state_size, num_actions, 128, int(2e5))
-  #     dqnAgent.restore(dqnout)
-
-  # print('second')
-  # player_id = 1
-  # graph = tf.Graph()
-  # sess = tf.Session(graph=graph)
-  # sess.__enter__()
-  # with graph.as_default():
-  #     dqnAgent = dqn.DQN(sess, player_id, info_state_size, num_actions, 128, int(2e5))
-  #     dqnAgent.restore(dqnout)
 
 if __name__ == "__main__":
-  app.run(main)
-  # agents = [LoadAgent("random", 'fcpa', i, 1234) for i in range(2)]
-  # runPokerGame(agents)
+    app.run(main)
+    # agents = [LoadAgent("random", 'fcpa', i, 1234) for i in range(2)]
+    # runPokerGame(agents)

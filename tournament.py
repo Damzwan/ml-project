@@ -52,7 +52,7 @@ def play_match(game, agent1, agent2, seed=1234, rounds=100):
     results = []
     for _ in tqdm(range(rounds)):
         # Alternate between the two agents as p1 and p2
-        for (p1, p2) in [(agent1, agent2)]:#, (agent2, agent1)]:
+        for (p1, p2) in [(agent1, agent2), (agent2, agent1)]:
             try:
                 returns = evaluate_bots(
                         game.new_initial_state(),

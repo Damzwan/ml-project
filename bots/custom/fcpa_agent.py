@@ -64,13 +64,30 @@ class Agent(pyspiel.Bot):
             self.dqnAgent = dqnObject
             return
 
+
         self.graph = tf.Graph()
         sess = tf.Session(graph=self.graph)
         sess.__enter__()
         with self.graph.as_default():
+            agents = [
+                dqn.DQN(sess,
+                        idx,
+                        info_state_size,
+                        num_actions) for idx # todo maybe needs all parameters
+                in range(2)
+            ]  # First define all agents, this way the session is aware of all the agent variables
             dqnout = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
-            self.dqnAgent = dqn.DQN(sess, player_id, info_state_size, num_actions, 128, int(2e5))
-            self.dqnAgent.restore(dqnout)
+            agents = [agent.restore(dqnout) for agent in agents]
+            self.dqnAgent = agents[player_id]
+
+
+        # self.graph = tf.Graph()
+        # sess = tf.Session(graph=self.graph)
+        # sess.__enter__()
+        # with self.graph.as_default():
+        #     dqnout = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
+        #     self.dqnAgent = dqn.DQN(sess, player_id, info_state_size, num_actions, 128, int(2e5))
+        #     self.dqnAgent.restore(dqnout)
 
     def setNewEnv(self):
         fcpa_game_string = (
