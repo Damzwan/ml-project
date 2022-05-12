@@ -131,7 +131,7 @@ def printResultsOverview(results):
 
 
 if __name__ == '__main__':
-    agent1 = 'random'
+    agent1 = 'custom'
     agent2 = 'random'
 
     agent1_dir = './bots/' + agent1 + '/'
