@@ -80,7 +80,7 @@ def test_api_calls():
     fcpa_game_string = (
         "universal_poker(betting=nolimit,numPlayers=2,numRounds=4,blind=150 100,"
         "firstPlayer=2 1 1 1,numSuits=4,numRanks=13,numHoleCards=2,numBoardCards=0 3 1 1,"
-        "stack=500 500,bettingAbstraction=fcpa)")
+        "stack=20000 20000,bettingAbstraction=fcpa)")
     game = pyspiel.load_game(fcpa_game_string)
     bots = [get_agent_for_tournament(player_id) for player_id in [0,1]]
     returns = evaluate_bots.evaluate_bots(game.new_initial_state(), bots, np.random)

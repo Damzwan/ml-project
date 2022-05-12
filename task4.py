@@ -18,8 +18,7 @@ from tournament import load_agent_from_dir
 from fcpa_agent_temp import createAgentFromDQN
 
 NUM_TRAIN_EPISODES = 2000000
-EVAL_EVERY = 1000
-SAVE_EVERY = 50000
+EVAL_EVERY = 20000
 HIDDEN_LAYERS_SIZES = [128]
 REPLAY_BUFFER_CAPACITY = int(10e3)  # 1e3 ~= 650MB  -> don't overdo!          
 RESERVOIR_BUFFER_CAPACITY = int(2e6)
@@ -44,7 +43,7 @@ def main(unused_argv):
   fcpa_game_string = (
         "universal_poker(betting=nolimit,numPlayers=2,numRounds=4,blind=150 100,"
         "firstPlayer=2 1 1 1,numSuits=4,numRanks=13,numHoleCards=2,numBoardCards=0 3 1 1,"
-        "stack=500 500,bettingAbstraction=fcpa)")
+        "stack=20000 20000,bettingAbstraction=fcpa)")
   random_agent = load_agent_from_dir('random', './bots/random/')
   game = pyspiel.load_game(fcpa_game_string)
   num_players = 2
@@ -82,7 +81,7 @@ def main(unused_argv):
 
     for ep in range(NUM_TRAIN_EPISODES):
       if (ep + 1) % EVAL_EVERY == 0 and ep > 500:
-        avg = getAverageScore(game, agents, random_agent, 2000) # eval_every is not related, but scales well with how often you want updates
+        avg = getAverageScore(game, agents, random_agent, 10000)
         logging.info("[%s] average reward: %s, loss: %s", ep+1, avg, [agent.loss for agent in agents])
 
         for playerIndex in range(2):
