@@ -104,7 +104,7 @@ def cli(agent1_id, agent1_dir, agent2_id, agent2_dir, output, rounds, seed):
     fcpa_game_string = (
         "universal_poker(betting=nolimit,numPlayers=2,numRounds=4,blind=150 100,"
         "firstPlayer=2 1 1 1,numSuits=4,numRanks=13,numHoleCards=2,numBoardCards=0 3 1 1,"
-        "stack=20000 20000,bettingAbstraction=fcpa)")
+        "stack=500 500,bettingAbstraction=fcpa)")
     logger.info("Creating game: {}".format(fcpa_game_string))
     game = pyspiel.load_game(fcpa_game_string)
     # Load the agents
@@ -132,12 +132,12 @@ def printResultsOverview(results):
 
 if __name__ == '__main__':
     agent1 = 'custom'
-    agent2 = 'random'
+    agent2 = 'alwaysCall'
 
     agent1_dir = './bots/' + agent1 + '/'
     agent2_dir = './bots/' + agent2 + '/'
 
     output = 'output.csv'
-    rounds = 200000
+    rounds = 20000
     seed = int(random.random()*100000)
     sys.exit(cli(agent1, agent1_dir, agent2, agent2_dir, output, rounds, seed))

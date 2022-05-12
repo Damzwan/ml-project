@@ -51,9 +51,6 @@ class Agent(pyspiel.Bot):
         """
         pyspiel.Bot.__init__(self)
         self.player_id = player_id
-        if player_id == 1: # todo make player 2 loadable
-            return
-
         self.verbose = False
 
         self.setNewEnv()
@@ -70,14 +67,22 @@ class Agent(pyspiel.Bot):
         sess.__enter__()
         with self.graph.as_default():
             agents = [
-                dqn.DQN(sess,
-                        idx,
-                        info_state_size,
-                        num_actions) for idx # todo maybe needs all parameters
+                dqn.DQN(sess, 
+                        idx, 
+                        info_state_size, 
+                        num_actions, 
+                        [128], 
+                        int(10e3),
+                        epsilon_start=0.8, 
+                        epsilon_end=0.001,
+                        learn_every=1000,
+                        optimizer_str='adam',
+                        loss_str='mse',
+                        min_buffer_size_to_learn=500) for idx
                 in range(2)
             ]  # First define all agents, this way the session is aware of all the agent variables
             dqnout = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
-            agents = [agent.restore(dqnout) for agent in agents]
+            [agent.restore(dqnout) for agent in agents]
             self.dqnAgent = agents[player_id]
 
 
@@ -93,7 +98,7 @@ class Agent(pyspiel.Bot):
         fcpa_game_string = (
         "universal_poker(betting=nolimit,numPlayers=2,numRounds=4,blind=150 100,"
         "firstPlayer=2 1 1 1,numSuits=4,numRanks=13,numHoleCards=2,numBoardCards=0 3 1 1,"
-        "stack=20000 20000,bettingAbstraction=fcpa)")
+        "stack=500 500,bettingAbstraction=fcpa)")
         game = pyspiel.load_game(fcpa_game_string)
         num_players = 2
 
@@ -159,7 +164,7 @@ def test_api_calls():
     fcpa_game_string = (
         "universal_poker(betting=nolimit,numPlayers=2,numRounds=4,blind=150 100,"
         "firstPlayer=2 1 1 1,numSuits=4,numRanks=13,numHoleCards=2,numBoardCards=0 3 1 1,"
-        "stack=20000 20000,bettingAbstraction=fcpa)")
+        "stack=500 500,bettingAbstraction=fcpa)")
     game = pyspiel.load_game(fcpa_game_string)
     bots = [get_agent_for_tournament(player_id) for player_id in [0,1]]
     returns = evaluate_bots.evaluate_bots(game.new_initial_state(), bots, np.random)

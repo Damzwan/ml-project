@@ -18,7 +18,7 @@ from tournament import load_agent_from_dir
 from fcpa_agent_temp import createAgentFromDQN
 
 NUM_TRAIN_EPISODES = 2000000
-EVAL_EVERY = 100
+EVAL_EVERY = 1000
 SAVE_EVERY = 50000
 HIDDEN_LAYERS_SIZES = [128]
 REPLAY_BUFFER_CAPACITY = int(10e3)  # 1e3 ~= 650MB  -> don't overdo!          
@@ -78,7 +78,7 @@ def main(unused_argv):
     ]
     sess.run(tf.global_variables_initializer())
 
-    bestAverage = [-9999, -9999]
+    bestAverage = [-20000, -20000] # initialize best average on negative of betting stack
 
     for ep in range(NUM_TRAIN_EPISODES):
       if (ep + 1) % EVAL_EVERY == 0 and ep > 500:
