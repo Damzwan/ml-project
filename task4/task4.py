@@ -15,12 +15,13 @@ import os
 import numpy as np
 from open_spiel.python.algorithms.evaluate_bots import evaluate_bots
 from tournament import load_agent_from_dir
-from fcpa_agent_temp import createAgentFromDQN
+from fcpa_agent import createAgentFromDQN
+import matplotlib.pyplot as plt 
 
-NUM_TRAIN_EPISODES = 2000000
-EVAL_EVERY = 20000
+NUM_TRAIN_EPISODES = 1000000
+EVAL_EVERY = 5000
 HIDDEN_LAYERS_SIZES = [128]
-REPLAY_BUFFER_CAPACITY = int(10e3)  # 1e3 ~= 650MB  -> don't overdo!          
+REPLAY_BUFFER_CAPACITY = int(10e3)  # 1e3 ~= 650MB        
 RESERVOIR_BUFFER_CAPACITY = int(2e6)
 
 import os, sys
@@ -40,6 +41,7 @@ def getAverageScore(game, agents, random_agents, num_rounds):
 
 
 def main(unused_argv):
+  scores = [[], [], []] # last is iteration
   fcpa_game_string = (
         "universal_poker(betting=nolimit,numPlayers=2,numRounds=4,blind=150 100,"
         "firstPlayer=2 1 1 1,numSuits=4,numRanks=13,numHoleCards=2,numBoardCards=0 3 1 1,"
@@ -81,8 +83,11 @@ def main(unused_argv):
 
     for ep in range(NUM_TRAIN_EPISODES):
       if (ep + 1) % EVAL_EVERY == 0 and ep > 500:
-        avg = getAverageScore(game, agents, random_agent, 10000)
+        avg = getAverageScore(game, agents, random_agent, 30000)
         logging.info("[%s] average reward: %s, loss: %s", ep+1, avg, [agent.loss for agent in agents])
+        scores[0].append(avg[0])
+        scores[1].append(avg[1])
+        scores[2].append(ep+1)
 
         for playerIndex in range(2):
           if avg[playerIndex] > bestAverage[playerIndex]:
@@ -96,7 +101,13 @@ def main(unused_argv):
 
       for agent in agents:
         agent.step(time_step)
-
+    
+  plt.plot(scores[2], scores[0], label='Agent 0')
+  plt.plot(scores[2], scores[1], label='Agent 1')
+  plt.xlabel('Iteration')
+  plt.ylabel('Average reward')
+  plt.legend()
+  plt.savefig('agentreward.png')
 
 if __name__ == "__main__":
     app.run(main)

@@ -138,6 +138,6 @@ if __name__ == '__main__':
     agent2_dir = './bots/' + agent2 + '/'
 
     output = 'output.csv'
-    rounds = 200000
+    rounds = 1000
     seed = int(random.random()*100000)
     sys.exit(cli(agent1, agent1_dir, agent2, agent2_dir, output, rounds, seed))
