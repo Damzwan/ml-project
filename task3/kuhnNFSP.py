@@ -28,7 +28,7 @@ from open_spiel.python import policy
 from open_spiel.python import rl_environment
 from open_spiel.python.algorithms import exploitability, random_agent
 from open_spiel.python.algorithms import nfsp
-from kuhndqn import eval_against_random_bots
+from kuhnDQN import eval_against_random_bots
 
 import matplotlib.pyplot as plt
 
