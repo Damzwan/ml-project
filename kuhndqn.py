@@ -44,6 +44,33 @@ flags.DEFINE_integer("reservoir_buffer_capacity", int(2e6),
 flags.DEFINE_float("anticipatory_param", 0.1,
                    "Prob of using the rl best response as episode policy.")
 
+class DqnPolicies(policy.Policy):
+  """Joint policy to be evaluated."""
+
+  def __init__(self, env, dqn_policies):
+    game = env.game
+    player_ids = [0, 1]
+    super(DqnPolicies, self).__init__(game, player_ids)
+    self._policies = dqn_policies
+    self._obs = {"info_state": [None, None], "legal_actions": [None, None]}
+
+  def action_probabilities(self, state, player_id=None):
+    cur_player = state.current_player()
+    legal_actions = state.legal_actions(cur_player)
+
+    self._obs["current_player"] = cur_player
+    self._obs["info_state"][cur_player] = (
+        state.information_state_tensor(cur_player))
+    self._obs["legal_actions"][cur_player] = legal_actions
+
+    info_state = rl_environment.TimeStep(
+        observations=self._obs, rewards=None, discounts=None, step_type=None)
+
+    print(info_state)
+    p = self._policies[cur_player].step(info_state, is_evaluation=True).probs
+    prob_dict = {action: p[action] for action in legal_actions}
+    return prob_dict
+
 
 def eval_against_random_bots(env, trained_agents, random_agents, num_episodes):
   """Evaluates `trained_agents` against `random_agents` for `num_episodes`."""
@@ -76,6 +103,10 @@ def main(unused_argv):
 
   hidden_layers_sizes = [int(l) for l in FLAGS.hidden_layers_sizes]
 
+  expls = []
+  nashs = []
+  iterations = []
+
   with tf.Session() as sess:
     # pylint: disable=g-complex-comprehension
     agents = [
@@ -88,6 +119,7 @@ def main(unused_argv):
             replay_buffer_capacity=FLAGS.replay_buffer_capacity,
             batch_size=50) for idx in range(num_players)
     ]
+    expl_policies_avg = DqnPolicies(env, agents)
 
     random_agents = [
       random_agent.RandomAgent(player_id=idx, num_actions=num_actions)
@@ -101,6 +133,14 @@ def main(unused_argv):
         # logging.info("Losses: %s", losses)
         avg = eval_against_random_bots(env, agents, random_agents, 10000)
         logging.info("[%s] average reward %s", ep + 1, avg)
+
+        expl = exploitability.exploitability(env.game, expl_policies_avg)
+        nash = exploitability.nash_conv(env.game, expl_policies_avg)
+        expls.append(expl)
+        nashs.append(nash)
+        iterations.append(ep + 1)
+        logging.info("[%s] Exploitability AVG %s, %s", ep + 1, expl, nash)
+        logging.info("_____________________________________________")
 
       time_step = env.reset()
       while not time_step.last():

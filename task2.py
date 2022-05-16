@@ -11,8 +11,10 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 
-from open_spiel.python import rl_environment
-from open_spiel.python.algorithms import tabular_qlearner, random_agent
+from open_spiel.python import rl_environment, policy
+import custom_tabular_qlearner
+from LFAQ_custom_tabular_qlearner import LFAQQLEARNING
+from custom_tabular_qlearner import Custom_QLearner
 from open_spiel.python.egt.utils import game_payoffs_array
 
 
@@ -72,7 +74,7 @@ rps_game = _manually_create_game([[0, -0.25, 0.5], [0.25, 0, -0.05], [-0.5, 0.05
                                  [[0, 0.25, -0.5], [-0.25, 0, 0.05], [0.5, -0.05, 0]],
                                  pyspiel.GameType.Utility.ZERO_SUM, ["Rock", "Paper", "Scissors"])
 
-dispersion_game = _manually_create_game([[-1, 1], [1, -1]], [[1, -1], [1, -1]],
+dispersion_game = _manually_create_game([[-1, 1], [1, -1]], [[-1, 1], [1, -1]],
                                         pyspiel.GameType.Utility.GENERAL_SUM, ["D1", "D2"])
 
 battle_of_sexes_game = _manually_create_game([[3, 0], [0, 2]], [[2, 0], [0, 3]],
@@ -84,30 +86,26 @@ subsidy_game = _manually_create_game([[10, 0], [11, 12]], [[10, 11], [0, 12]],
 
 
 def subtask1():
-    env = rl_environment.Environment(battle_of_sexes_game)
+    env = rl_environment.Environment(subsidy_game)
 
     num_players = 2
-    training_episodes = int(1e5) + 1
+    training_episodes = 1001
     num_actions = env.action_spec()["num_actions"]
 
     agents = [
-        tabular_qlearner.QLearner(player_id=idx, num_actions=num_actions)
-        for idx in range(num_players)
-    ]
-
-    # random agents for evaluation
-    random_agents = [
-        random_agent.RandomAgent(player_id=idx, num_actions=num_actions)
+        custom_tabular_qlearner.Custom_QLearner(player_id=idx, num_actions=num_actions)
         for idx in range(num_players)
     ]
 
     q_val = {0: [], 1: [], 2: []}
+
     # 1. Train the agents
     for cur_episode in range(training_episodes):
         if cur_episode % int(1e3) == 0:
             # win_rates = eval_against_random_bots(env, agents, random_agents, 1000)
             avg0, avg1 = eval_average(env, agents)
             logging.info("Starting episode %s, average rewards: %s vs %s", cur_episode, avg0, avg1)
+
         time_step = env.reset()
         while not time_step.last():
             agent1_output = agents[0].step(time_step)
@@ -122,18 +120,20 @@ def subtask1():
         for key, val in list(agents[0]._q_values.values())[0].items():
             q_val[key].append(val)
 
-    plt.plot(range(len(q_val[0])), q_val[0], label='q0')
-    plt.plot(range(len(q_val[1])), q_val[1], label='q1')
-    plt.plot(range(len(q_val[2])), q_val[2], label='q2')
+    plt.plot(range(len(q_val[0])), q_val[0], label='S1')
+    plt.plot(range(len(q_val[1])), q_val[1], label='S2')
+    # plt.plot(range(len(q_val[2])), q_val[2], label='scissors')
+    plt.xlabel('rounds')
+    plt.ylabel('Q-value')
     plt.legend()
-    plt.savefig('qval.png')
+    plt.savefig('task2.1-subsidy.png')
 
     for agent in agents:
         print(agent._q_values)
 
 
 class MultiPopulationDynamicsLenientBoltzman(object):
-    def __init__(self, payoff_tensor, dynamics):
+    def __init__(self, payoff_tensor, dynamics, k=2):
         """Initializes the multi-population dynamics."""
         if isinstance(dynamics, list) or isinstance(dynamics, tuple):
             assert payoff_tensor.shape[0] == len(dynamics)
@@ -141,7 +141,7 @@ class MultiPopulationDynamicsLenientBoltzman(object):
             dynamics = [dynamics] * payoff_tensor.shape[0]
         self.payoff_tensor = payoff_tensor
         self.dynamics = dynamics
-        self.k = 1
+        self.k = k
 
     def lenient_boltzmannq(self, state, payoff):
         res = []
@@ -156,7 +156,8 @@ class MultiPopulationDynamicsLenientBoltzman(object):
                 indices_smaller = np.argwhere(candidate_values[:] < payoff[i][j]).flatten()
                 indices_eq = np.argwhere(candidate_values[:] == payoff[i][j]).flatten()
 
-                second_term = (np.sum(state[indices_smaller_or_eq]) - np.sum(state[indices_smaller])) / np.sum(
+                second_term = (np.sum(state[indices_smaller_or_eq]) ** self.k - np.sum(
+                    state[indices_smaller] ** self.k)) / np.sum(
                     state[indices_eq])
 
                 u += first_term * second_term
@@ -182,25 +183,86 @@ class MultiPopulationDynamicsLenientBoltzman(object):
 
 
 def subtask2():
-    game = dispersion_game
-    rd = dynamics.boltzmannq
+    game = subsidy_game
+    env = rl_environment.Environment(game)
+
+    use_boltz = True
+    k = 5 if use_boltz else ''
+
+    num_players = 2
+    training_episodes = int(1e4)
+    num_actions = env.action_spec()["num_actions"]
+    prob_histories = []
+    probs = [[[0.5, 0.5], [0.5, 0.5]], [[0.5, 0.5], [.65, 0.5]], [[0.65, 0.5], [0.5, 0.5]]]
+
+    for prob in probs:
+        history = []
+
+        if use_boltz:
+            agents = [
+                LFAQQLEARNING(player_id=idx, num_actions=num_actions, init_q_values=prob[idx], step_size=0.01, k=k,
+                              discount_factor=1)
+                for idx in range(num_players)
+            ]
+
+        else:
+            agents = [
+                Custom_QLearner(player_id=idx, num_actions=num_actions, init_q_values=prob[idx], step_size=0.001)
+                for idx in range(num_players)
+            ]
+
+        for cur_episode in range(training_episodes):
+            time_step = env.reset()
+            while not time_step.last():
+                agent1_output = agents[0].step(time_step)
+                agent2_output = agents[1].step(time_step)
+                if not use_boltz:
+                    history.append([agent1_output.probs[0], agent2_output.probs[0]])
+                time_step = env.step([agent1_output.action, agent2_output.action])
+
+            # Episode is over, step all agents with final info state.
+            # agents[0].step(time_step)
+
+            if use_boltz:
+                agent1_output = agents[0].step(time_step)
+                agent2_output = agents[1].step(time_step)
+
+                if agent1_output is not None:
+                    history.append([agent1_output.probs[0], agent2_output.probs[0]])
+            else:
+                agents[0].step(time_step)
+                agents[1].step(time_step)
+
+        prob_histories.append(history)
+    plot_trajectory(prob_histories, game, use_boltz, k)
+
+
+def plot_trajectory(prob_histories, game, use_boltz, k):
+    rd = dynamics.boltzmannq if use_boltz else dynamics.replicator
     game_size = game.num_rows()
     payoff_matrix = game_payoffs_array(game)
 
-    if game_size == 2:
-        # dyn = dynamics.MultiPopulationDynamics(payoff_matrix, rd)
-        dyn = MultiPopulationDynamicsLenientBoltzman(payoff_matrix, rd)
-        visualiser = Dynamics2x2Axes(plt.figure(), [0, 0, 1, 1])
-        visualiser.streamplot(dyn)
+    dyn = dynamics.MultiPopulationDynamics(payoff_matrix, rd) if game_size == 2 else dynamics.SinglePopulationDynamics(
+        payoff_matrix, rd)
+    dyn = MultiPopulationDynamicsLenientBoltzman(payoff_matrix, rd, k=k) if use_boltz else dyn
 
-        x, y, u, v = _eval_dynamics_2x2_grid(dyn, 50)
-        plt.streamplot(x, y, u, v)
-        plt.savefig("q.png")
-        plt.show()
-    elif game_size == 3:
-        dyn = dynamics.SinglePopulationDynamics(payoff_matrix, rd)
-        visualiser = Dynamics3x3Axes(plt.figure(), [0, 0, 1, 1])
-        visualiser.streamplot(dyn)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='2x2') if game_size == 2 else fig.add_subplot(111, projection='3x3')
+    ax.quiver(dyn)
+
+    for history in prob_histories:
+        x = [lst[0] for lst in history]
+        y = [lst[1] for lst in history]
+        plt.plot(x, y)
+
+    if game_size == 2:
+        plt.xlabel('Player 0: Probability of playing S1')
+        plt.ylabel('Player 1: Probability of playing S2')
+    else:
+        ax.set_labels(['R', 'P', 'S'])
+
+    name = 'boltz' if use_boltz else 'replicator'
+    plt.savefig('task2.2-' + name + '-subs' + str(k) + '.jpg')
 
 
 def main(_):
