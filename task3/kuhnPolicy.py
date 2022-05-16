@@ -27,13 +27,14 @@ import matplotlib.pyplot as plt
 
 from open_spiel.python import policy
 from open_spiel.python import rl_environment
-from open_spiel.python.algorithms import exploitability
+from open_spiel.python.algorithms import exploitability, random_agent
 from open_spiel.python.algorithms import policy_gradient
+from kuhndqn import eval_against_random_bots
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer("num_episodes", int(1e7), "Number of train episodes.")
-flags.DEFINE_integer("eval_every", int(25000), "Eval agents every x episodes.")
+flags.DEFINE_integer("num_episodes", int(300), "Number of train episodes.")
+flags.DEFINE_integer("eval_every", int(5), "Eval agents every x episodes.")
 flags.DEFINE_enum("loss_str", "rpg", ["a2c", "rpg", "qpg", "rm"],
                   "PG loss to use.")
 
@@ -74,9 +75,7 @@ def main(_):
   info_state_size = env.observation_spec()["info_state"][0]
   num_actions = env.action_spec()["num_actions"]
 
-  expls = []
-  nashs = []
-  iterations = []
+  results = [[], [], [], []]
 
   with tf.Session() as sess:
     # pylint: disable=g-complex-comprehension
@@ -89,21 +88,24 @@ def main(_):
             loss_str=FLAGS.loss_str,
             hidden_layers_sizes=(128,)) for idx in range(num_players)
     ]
+    random_agents = [
+      random_agent.RandomAgent(player_id=idx, num_actions=num_actions)
+      for idx in range(num_players)
+    ]
     expl_policies_avg = PolicyGradientPolicies(env, agents)
 
     sess.run(tf.global_variables_initializer())
     for ep in range(FLAGS.num_episodes):
 
-      if (ep + 1) % FLAGS.eval_every == 0 and ep > 10000:
-        losses = [agent.loss for agent in agents]
+      if (ep + 1) % FLAGS.eval_every == 0 and ep >= 5:
         expl = exploitability.exploitability(env.game, expl_policies_avg)
         nash = exploitability.nash_conv(env.game, expl_policies_avg)
-        expls.append(expl)
-        nashs.append(nash)
-        iterations.append(ep+1)
-        msg = "-" * 80 + "\n"
-        msg += "{}: {}\n{}\n".format(ep + 1, expl, losses)
-        logging.info("%s", msg)
+        r = eval_against_random_bots(env, agents, random_agents, 10000)
+        results[0].append(ep+1)
+        results[1].append(r[0])
+        results[2].append(r[1])
+        results[3].append(expl)
+        logging.info("[%s] Exploitability AVG %s, %s, reward %s", ep + 1, expl, nash, r)
 
       time_step = env.reset()
       while not time_step.last():
@@ -116,10 +118,7 @@ def main(_):
       for agent in agents:
         agent.step(time_step)
 
-  plt.plot(iterations, expls, label="Exploitability")
-  plt.plot(iterations, nashs, label="NashConv")
-  plt.legend()
-  plt.savefig('task3_policy.png')
+  print(results)
 
 
 if __name__ == "__main__":
